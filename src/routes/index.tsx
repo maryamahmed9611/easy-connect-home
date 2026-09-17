@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { HeartPulse, Mic, ShoppingBasket, UsersRound, Check, ArrowLeft } from "lucide-react";
-import { useEffect, useState } from "react";
+import { HeartPulse, Mic, ShoppingBasket, UsersRound, Check, ArrowLeft, Languages } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/ui/button";
 
@@ -20,14 +20,153 @@ export const Route = createFileRoute("/")({
 
 type CareAction = "Medical Support" | "Daily Needs" | "Talk to Family";
 type Screen = "home" | "listening" | "waiting" | "confirmation";
+type LanguageCode = "en-IN" | "hi-IN" | "kn-IN";
+
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  length: number;
+  [index: number]: { transcript: string };
+};
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: {
+    length: number;
+    [index: number]: SpeechRecognitionResultLike;
+  };
+};
+
+type SpeechRecognitionErrorLike = { error: string };
+
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+
+type SpeechRecognitionWindow = Window & {
+  SpeechRecognition?: new () => SpeechRecognitionLike;
+  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+};
+
+const LANGUAGES: Array<{ code: LanguageCode; label: string }> = [
+  { code: "en-IN", label: "English" },
+  { code: "hi-IN", label: "हिंदी" },
+  { code: "kn-IN", label: "ಕನ್ನಡ" },
+];
+
+const CONFIRMATION_SPEECH: Record<LanguageCode, string> = {
+  "en-IN": "Your request has been confirmed",
+  "hi-IN": "आपका अनुरोध स्वीकार कर लिया गया है",
+  "kn-IN": "ನಿಮ್ಮ ವಿನಂತಿಯನ್ನು ದೃಢೀಕರಿಸಲಾಗಿದೆ",
+};
 
 function Index() {
+  const [language, setLanguage] = useState<LanguageCode | null>(null);
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedAction, setSelectedAction] = useState<CareAction>("Medical Support");
+  const [transcript, setTranscript] = useState("");
+  const [speechMessage, setSpeechMessage] = useState("");
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const recognitionActiveRef = useRef(false);
+  const speechReceivedRef = useRef(false);
+
+  useEffect(() => {
+    const savedLanguage = window.sessionStorage.getItem("care-language");
+    if (savedLanguage === "en-IN" || savedLanguage === "hi-IN" || savedLanguage === "kn-IN") {
+      setLanguage(savedLanguage);
+    }
+  }, []);
+
+  useEffect(() => () => {
+    recognitionActiveRef.current = false;
+    recognitionRef.current?.abort();
+    window.speechSynthesis?.cancel();
+  }, []);
+
+  const chooseLanguage = (code: LanguageCode) => {
+    window.sessionStorage.setItem("care-language", code);
+    setLanguage(code);
+    setScreen("home");
+  };
+
+  const stopRecognition = () => {
+    recognitionActiveRef.current = false;
+    recognitionRef.current?.abort();
+    recognitionRef.current = null;
+  };
 
   const startListening = (action: CareAction) => {
     setSelectedAction(action);
+    setTranscript("");
+    setSpeechMessage("");
     setScreen("listening");
+
+    if (!language) return;
+
+    const speechWindow = window as SpeechRecognitionWindow;
+    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+    if (!Recognition) {
+      setSpeechMessage("Voice recognition is not available in this browser. You can continue using the button below.");
+      return;
+    }
+
+    stopRecognition();
+    const recognition = new Recognition();
+    recognition.lang = language;
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognitionActiveRef.current = true;
+    speechReceivedRef.current = false;
+    recognitionRef.current = recognition;
+
+    recognition.onresult = (event) => {
+      let heardText = "";
+      for (let resultIndex = 0; resultIndex < event.results.length; resultIndex += 1) {
+        const result = event.results[resultIndex];
+        const alternative = result?.[0];
+        if (alternative) heardText += `${alternative.transcript} `;
+      }
+      const cleanedText = heardText.trim();
+      if (cleanedText) {
+        speechReceivedRef.current = true;
+        setTranscript(cleanedText);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (!recognitionActiveRef.current) return;
+      recognitionActiveRef.current = false;
+      recognitionRef.current = null;
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        setSpeechMessage("Microphone access was not allowed. Please enable it in your browser settings, or continue using the button below.");
+      } else if (event.error === "no-speech") {
+        setSpeechMessage("I could not hear any speech. Please go back and try again, or continue using the button below.");
+      } else {
+        setSpeechMessage("Voice listening could not start. You can continue using the button below.");
+      }
+    };
+
+    recognition.onend = () => {
+      if (!recognitionActiveRef.current) return;
+      recognitionActiveRef.current = false;
+      recognitionRef.current = null;
+      if (speechReceivedRef.current) setScreen("waiting");
+    };
+
+    try {
+      recognition.start();
+    } catch {
+      recognitionActiveRef.current = false;
+      recognitionRef.current = null;
+      setSpeechMessage("Voice listening could not start. You can continue using the button below.");
+    }
   };
 
   useEffect(() => {
@@ -37,6 +176,61 @@ function Index() {
     return () => window.clearTimeout(confirmationTimer);
   }, [screen]);
 
+  useEffect(() => {
+    if (screen !== "confirmation" || !language || !("speechSynthesis" in window)) return;
+
+    const speakConfirmation = () => {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(CONFIRMATION_SPEECH[language]);
+      utterance.lang = language;
+      utterance.rate = 0.9;
+      const voices = window.speechSynthesis.getVoices();
+      const exactVoice = voices.find((voice) => voice.lang.toLowerCase() === language.toLowerCase());
+      const languagePrefix = language.slice(0, 2).toLowerCase();
+      const relatedVoice = voices.find((voice) => voice.lang.toLowerCase().startsWith(languagePrefix));
+      const fallbackVoice = voices.find((voice) => voice.default) ?? voices[0];
+      const selectedVoice = exactVoice ?? relatedVoice ?? fallbackVoice;
+      if (selectedVoice) {
+        try {
+          utterance.voice = selectedVoice;
+        } catch {
+          // The browser will use its default voice if an exposed voice cannot be assigned.
+        }
+      }
+      window.speechSynthesis.speak(utterance);
+    };
+
+    speakConfirmation();
+    window.speechSynthesis.addEventListener("voiceschanged", speakConfirmation, { once: true });
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", speakConfirmation);
+      window.speechSynthesis.cancel();
+    };
+  }, [language, screen]);
+
+  if (!language) {
+    return (
+      <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
+        <OrganicShapes />
+        <section className="relative z-10 flex w-full max-w-md flex-col items-center text-center">
+          <Languages className="size-16 text-microphone" strokeWidth={2.5} aria-hidden="true" />
+          <h1 className="mt-5 text-4xl font-extrabold leading-tight text-foreground">Choose your language</h1>
+          <div className="mt-8 grid w-full gap-4">
+            {LANGUAGES.map((option) => (
+              <Button
+                key={option.code}
+                onClick={() => chooseLanguage(option.code)}
+                className="min-h-24 w-full rounded-2xl bg-card px-6 text-3xl font-extrabold text-card-foreground shadow-warm hover:bg-card"
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   if (screen === "listening") {
     return (
       <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
@@ -44,7 +238,10 @@ function Index() {
         <section className="relative z-10 flex w-full max-w-md flex-col items-center text-center">
           <Button
             variant="quiet"
-            onClick={() => setScreen("home")}
+            onClick={() => {
+              stopRecognition();
+              setScreen("home");
+            }}
             aria-label="Return to home"
             className="absolute left-0 top-0 size-14 rounded-full"
           >
@@ -62,8 +259,10 @@ function Index() {
             id="spoken-text"
             readOnly
             aria-label="Spoken text will appear here"
+            value={transcript}
             className="mt-3 h-28 w-full resize-none rounded-3xl border-4 border-border bg-card p-4 text-2xl text-card-foreground shadow-soft focus:outline-none"
           />
+          {speechMessage ? <p className="mt-4 text-2xl font-bold leading-snug text-foreground" role="alert">{speechMessage}</p> : null}
           <Button onClick={() => setScreen("waiting")} className="mt-7 min-h-16 w-full rounded-2xl px-8 text-2xl">
             Confirm Request
           </Button>
@@ -113,11 +312,23 @@ function Index() {
     <main className="app-background relative flex min-h-svh items-center justify-center overflow-hidden px-2 py-4 sm:px-4">
       <OrganicShapes />
       <section className="relative z-10 flex h-[calc(100svh-2rem)] max-h-[820px] w-full max-w-lg flex-col items-center">
-        <header className="w-full pt-1">
+        <header className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pt-1">
           <div className="min-w-0">
             <p className="text-2xl font-extrabold leading-tight text-foreground">Good morning,</p>
             <h1 className="text-2xl font-extrabold leading-tight text-foreground">we’re here for you</h1>
           </div>
+          <Button
+            variant="quiet"
+            size="icon"
+            onClick={() => {
+              window.sessionStorage.removeItem("care-language");
+              setLanguage(null);
+            }}
+            aria-label="Change language"
+            className="size-12 shrink-0 rounded-full bg-card/70 text-foreground shadow-soft hover:bg-card"
+          >
+            <Languages className="size-6" strokeWidth={2.5} />
+          </Button>
         </header>
 
         <Button
