@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { HeartPulse, Mic, ShoppingBasket, UsersRound, Check, ArrowLeft } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "../components/ui/button";
 
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/")({
 });
 
 type CareAction = "Medical Support" | "Daily Needs" | "Talk to Family";
-type Screen = "home" | "listening" | "confirmation";
+type Screen = "home" | "listening" | "waiting" | "confirmation";
 
 function Index() {
   const [screen, setScreen] = useState<Screen>("home");
@@ -30,9 +30,16 @@ function Index() {
     setScreen("listening");
   };
 
+  useEffect(() => {
+    if (screen !== "waiting") return;
+
+    const confirmationTimer = window.setTimeout(() => setScreen("confirmation"), 3000);
+    return () => window.clearTimeout(confirmationTimer);
+  }, [screen]);
+
   if (screen === "listening") {
     return (
-      <main className="relative grid min-h-svh place-items-center overflow-hidden bg-background px-6 py-5">
+      <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
         <OrganicShapes />
         <section className="relative z-10 flex w-full max-w-md flex-col items-center text-center">
           <Button
@@ -57,7 +64,7 @@ function Index() {
             aria-label="Spoken text will appear here"
             className="mt-3 h-28 w-full resize-none rounded-3xl border-4 border-border bg-card p-4 text-2xl text-card-foreground shadow-soft focus:outline-none"
           />
-          <Button onClick={() => setScreen("confirmation")} className="mt-7 min-h-16 w-full rounded-2xl px-8 text-2xl">
+          <Button onClick={() => setScreen("waiting")} className="mt-7 min-h-16 w-full rounded-2xl px-8 text-2xl">
             Confirm Request
           </Button>
         </section>
@@ -65,9 +72,28 @@ function Index() {
     );
   }
 
+  if (screen === "waiting") {
+    return (
+      <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
+        <OrganicShapes />
+        <section className="relative z-10 flex w-full max-w-md flex-col items-center text-center" aria-live="polite">
+          <div className="waiting-dots flex h-20 items-center justify-center gap-4 text-medical" aria-hidden="true">
+            <span className="size-6 rounded-full bg-current" />
+            <span className="size-6 rounded-full bg-current" />
+            <span className="size-6 rounded-full bg-current" />
+          </div>
+          <p className="mt-6 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
+          <h1 className="mt-3 max-w-sm text-4xl font-extrabold leading-tight text-foreground">
+            Support is on the way, please wait
+          </h1>
+        </section>
+      </main>
+    );
+  }
+
   if (screen === "confirmation") {
     return (
-      <main className="relative grid min-h-svh place-items-center overflow-hidden bg-background px-6 py-5">
+      <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
         <OrganicShapes />
         <section className="relative z-10 flex w-full max-w-md flex-col items-center text-center">
           <div className="grid size-40 place-items-center rounded-full bg-success text-success-foreground shadow-warm" aria-hidden="true">
@@ -84,27 +110,24 @@ function Index() {
   }
 
   return (
-    <main className="relative flex min-h-svh items-center justify-center overflow-hidden bg-background px-2 py-4 sm:px-4">
+    <main className="app-background relative flex min-h-svh items-center justify-center overflow-hidden px-2 py-4 sm:px-4">
       <OrganicShapes />
       <section className="relative z-10 flex h-[calc(100svh-2rem)] max-h-[820px] w-full max-w-lg flex-col items-center">
-        <header className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pt-1">
+        <header className="w-full pt-1">
           <div className="min-w-0">
             <p className="text-2xl font-extrabold leading-tight text-foreground">Good morning,</p>
             <h1 className="text-2xl font-extrabold leading-tight text-foreground">we’re here for you</h1>
           </div>
-          <button
-            type="button"
-            aria-label="Start voice assistant"
-            onClick={() => startListening("Medical Support")}
-            className="breathing-mic grid size-14 shrink-0 place-items-center rounded-full bg-microphone text-microphone-foreground shadow-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring"
-          >
-            <Mic className="size-7" strokeWidth={2.5} />
-          </button>
         </header>
 
-        <div className="central-microphone mt-3 grid size-28 shrink-0 place-items-center rounded-full border-4 border-background bg-microphone text-microphone-foreground shadow-warm" aria-hidden="true">
+        <Button
+          variant="quiet"
+          onClick={() => startListening("Medical Support")}
+          aria-label="Start voice assistant"
+          className="central-microphone breathing-mic mt-3 grid size-28 shrink-0 place-items-center rounded-full border-4 border-background bg-microphone p-0 text-microphone-foreground shadow-warm hover:bg-microphone"
+        >
           <Mic className="size-14" strokeWidth={2.5} />
-        </div>
+        </Button>
 
         <div className="relative mt-4 min-h-0 w-full flex-1" aria-label="Care options">
           <CareButton

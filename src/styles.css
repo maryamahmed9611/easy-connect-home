@@ -73,6 +73,8 @@
   --color-shape-gold: var(--shape-gold);
   --color-shape-sage: var(--shape-sage);
   --color-shape-line: var(--shape-line);
+  --color-background-start: var(--background-start);
+  --color-background-end: var(--background-end);
   --shadow-warm: var(--shadow-warm);
   --shadow-soft: var(--shadow-soft);
 }
@@ -81,6 +83,8 @@
   --font-friendly: "Nunito", ui-rounded, system-ui, sans-serif;
   --radius: 0.625rem;
   --background: oklch(0.965 0.025 83);
+  --background-start: oklch(0.87 0.105 51);
+  --background-end: oklch(0.965 0.04 91);
   --foreground: oklch(0.265 0.045 52);
   --card: oklch(0.99 0.012 85);
   --card-foreground: oklch(0.265 0.045 52);
@@ -186,8 +190,17 @@
   50% { transform: scale(1.07); }
 }
 
+@keyframes waiting-dot {
+  0%, 100% { transform: translateY(0) scale(0.86); opacity: 0.58; }
+  50% { transform: translateY(-0.65rem) scale(1); opacity: 1; }
+}
+
+.app-background { background: linear-gradient(145deg, var(--background-start), var(--background-end)); }
 .breathing-mic { animation: breathe 2.8s ease-in-out infinite; }
 .listening-pulse { animation: listen-pulse 1.8s ease-in-out infinite; }
+.waiting-dots span { animation: waiting-dot 1.8s ease-in-out infinite; }
+.waiting-dots span:nth-child(2) { animation-delay: 0.22s; }
+.waiting-dots span:nth-child(3) { animation-delay: 0.44s; }
 .organic-shape { border-radius: 42% 58% 63% 37% / 55% 38% 62% 45%; }
 .illustrated-icon { background: oklch(0.99 0.012 85 / 26%); transform: rotate(-2deg); }
 
@@ -197,5 +210,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .breathing-mic, .listening-pulse { animation: none; }
+  .breathing-mic, .listening-pulse, .waiting-dots span { animation: none; }
 }
