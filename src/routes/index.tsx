@@ -189,7 +189,14 @@ function Index() {
       const languagePrefix = language.slice(0, 2).toLowerCase();
       const relatedVoice = voices.find((voice) => voice.lang.toLowerCase().startsWith(languagePrefix));
       const fallbackVoice = voices.find((voice) => voice.default) ?? voices[0];
-      utterance.voice = exactVoice ?? relatedVoice ?? fallbackVoice ?? null;
+      const selectedVoice = exactVoice ?? relatedVoice ?? fallbackVoice;
+      if (selectedVoice) {
+        try {
+          utterance.voice = selectedVoice;
+        } catch {
+          // The browser will use its default voice if an exposed voice cannot be assigned.
+        }
+      }
       window.speechSynthesis.speak(utterance);
     };
 
