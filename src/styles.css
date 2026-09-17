@@ -19,6 +19,7 @@
  */
 
 @theme inline {
+  --font-sans: var(--font-friendly);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -59,29 +60,60 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-medical: var(--medical);
+  --color-medical-foreground: var(--medical-foreground);
+  --color-daily: var(--daily);
+  --color-daily-foreground: var(--daily-foreground);
+  --color-family: var(--family);
+  --color-family-foreground: var(--family-foreground);
+  --color-microphone: var(--microphone);
+  --color-microphone-foreground: var(--microphone-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-shape-gold: var(--shape-gold);
+  --color-shape-sage: var(--shape-sage);
+  --color-shape-line: var(--shape-line);
+  --shadow-warm: var(--shadow-warm);
+  --shadow-soft: var(--shadow-soft);
 }
 
 :root {
+  --font-friendly: "Nunito", ui-rounded, system-ui, sans-serif;
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
+  --background: oklch(0.965 0.025 83);
+  --foreground: oklch(0.265 0.045 52);
+  --card: oklch(0.99 0.012 85);
+  --card-foreground: oklch(0.265 0.045 52);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
+  --primary: oklch(0.49 0.1 145);
+  --primary-foreground: oklch(0.985 0.012 85);
+  --secondary: oklch(0.88 0.055 84);
+  --secondary-foreground: oklch(0.28 0.045 52);
+  --muted: oklch(0.92 0.03 77);
+  --muted-foreground: oklch(0.42 0.05 50);
+  --accent: oklch(0.73 0.1 65);
+  --accent-foreground: oklch(0.24 0.04 48);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
+  --border: oklch(0.68 0.055 75);
+  --input: oklch(0.68 0.055 75);
+  --ring: oklch(0.43 0.095 145);
+  --medical: oklch(0.62 0.13 35);
+  --medical-foreground: oklch(0.98 0.012 85);
+  --daily: oklch(0.72 0.095 137);
+  --daily-foreground: oklch(0.22 0.045 140);
+  --family: oklch(0.75 0.105 73);
+  --family-foreground: oklch(0.25 0.055 55);
+  --microphone: oklch(0.43 0.095 145);
+  --microphone-foreground: oklch(0.985 0.012 85);
+  --success: oklch(0.55 0.12 145);
+  --success-foreground: oklch(0.985 0.012 85);
+  --shape-gold: oklch(0.88 0.085 83 / 48%);
+  --shape-sage: oklch(0.83 0.07 137 / 42%);
+  --shape-line: oklch(0.72 0.09 48 / 28%);
+  --shadow-warm: 0 12px 28px oklch(0.35 0.06 55 / 18%);
+  --shadow-soft: 0 6px 18px oklch(0.35 0.05 55 / 14%);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -140,5 +172,29 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-friendly);
   }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 oklch(0.43 0.095 145 / 24%); }
+  50% { transform: scale(1.06); box-shadow: 0 0 0 12px oklch(0.43 0.095 145 / 0%); }
+}
+
+@keyframes listen-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.07); }
+}
+
+.breathing-mic { animation: breathe 2.8s ease-in-out infinite; }
+.listening-pulse { animation: listen-pulse 1.8s ease-in-out infinite; }
+.organic-shape { border-radius: 42% 58% 63% 37% / 55% 38% 62% 45%; }
+.illustrated-icon { background: oklch(0.99 0.012 85 / 26%); transform: rotate(-2deg); }
+
+@media (max-height: 680px) {
+  .care-action { max-width: 148px; font-size: 1.3rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breathing-mic, .listening-pulse { animation: none; }
 }
