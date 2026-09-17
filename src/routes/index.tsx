@@ -84,9 +84,9 @@ function Index() {
   }
 
   return (
-    <main className="relative flex min-h-svh items-center justify-center overflow-hidden bg-background px-4 py-4">
+    <main className="relative flex min-h-svh items-center justify-center overflow-hidden bg-background px-2 py-4 sm:px-4">
       <OrganicShapes />
-      <section className="relative z-10 flex h-[calc(100svh-2rem)] max-h-[820px] w-full max-w-md flex-col items-center">
+      <section className="relative z-10 flex h-[calc(100svh-2rem)] max-h-[820px] w-full max-w-lg flex-col items-center">
         <header className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pt-1">
           <div className="min-w-0">
             <p className="text-2xl font-extrabold leading-tight text-foreground">Good morning,</p>
@@ -102,28 +102,28 @@ function Index() {
           </button>
         </header>
 
-        <div className="relative mt-2 min-h-0 w-full flex-1" aria-label="Care options">
-          <div className="absolute left-1/2 top-[27%] z-20 grid size-20 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-4 border-background bg-microphone text-microphone-foreground shadow-warm" aria-hidden="true">
-            <Mic className="size-9" strokeWidth={2.5} />
-          </div>
+        <div className="central-microphone mt-3 grid size-28 shrink-0 place-items-center rounded-full border-4 border-background bg-microphone text-microphone-foreground shadow-warm" aria-hidden="true">
+          <Mic className="size-14" strokeWidth={2.5} />
+        </div>
 
+        <div className="relative mt-4 min-h-0 w-full flex-1" aria-label="Care options">
           <CareButton
             label="Medical Support"
-            icon={<HeartPulse className="size-14" strokeWidth={2.4} />}
+            icon={<HeartPulse className="size-16" strokeWidth={2.4} />}
             onClick={() => startListening("Medical Support")}
-            className="left-1/2 top-[2%] -translate-x-1/2 bg-medical text-medical-foreground"
+            className="left-1/2 top-0 -translate-x-1/2 bg-medical text-medical-foreground"
           />
           <CareButton
             label="Daily Needs"
-            icon={<ShoppingBasket className="size-14" strokeWidth={2.4} />}
+            icon={<ShoppingBasket className="size-16" strokeWidth={2.4} />}
             onClick={() => startListening("Daily Needs")}
-            className="bottom-[2%] left-[2%] bg-daily text-daily-foreground"
+            className="bottom-0 left-0 bg-daily text-daily-foreground"
           />
           <CareButton
             label="Talk to Family"
-            icon={<UsersRound className="size-14" strokeWidth={2.4} />}
+            icon={<UsersRound className="size-16" strokeWidth={2.4} />}
             onClick={() => startListening("Talk to Family")}
-            className="bottom-[2%] right-[2%] bg-family text-family-foreground"
+            className="bottom-0 right-0 bg-family text-family-foreground"
           />
         </div>
       </section>
@@ -136,7 +136,7 @@ function CareButton({ label, icon, onClick, className }: { label: CareAction; ic
     <button
       type="button"
       onClick={onClick}
-      className={`care-action absolute flex aspect-square w-[46%] max-w-48 min-w-[140px] flex-col items-center justify-center gap-2 rounded-[2.5rem] px-3 text-center text-2xl font-extrabold leading-tight shadow-warm transition-transform duration-200 focus-visible:z-30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background active:scale-[0.97] ${className}`}
+      className={`care-action absolute flex aspect-[0.9] w-[calc(50%-0.375rem)] max-w-56 min-w-[168px] flex-col items-center justify-center gap-3 rounded-[2.75rem] px-4 text-center text-2xl font-extrabold leading-tight shadow-warm transition-transform duration-200 focus-visible:z-30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background active:scale-[0.97] ${className}`}
       aria-label={label}
     >
       <span className="illustrated-icon grid size-16 place-items-center rounded-full" aria-hidden="true">{icon}</span>

@@ -99,12 +99,12 @@
   --border: oklch(0.68 0.055 75);
   --input: oklch(0.68 0.055 75);
   --ring: oklch(0.43 0.095 145);
-  --medical: oklch(0.62 0.13 35);
-  --medical-foreground: oklch(0.98 0.012 85);
-  --daily: oklch(0.72 0.095 137);
-  --daily-foreground: oklch(0.22 0.045 140);
-  --family: oklch(0.75 0.105 73);
-  --family-foreground: oklch(0.25 0.055 55);
+  --medical: oklch(0.7 0.19 40);
+  --medical-foreground: oklch(0.2 0.055 38);
+  --daily: oklch(0.75 0.18 140);
+  --daily-foreground: oklch(0.19 0.055 142);
+  --family: oklch(0.82 0.18 84);
+  --family-foreground: oklch(0.21 0.06 60);
   --microphone: oklch(0.43 0.095 145);
   --microphone-foreground: oklch(0.985 0.012 85);
   --success: oklch(0.55 0.12 145);
@@ -192,7 +192,8 @@
 .illustrated-icon { background: oklch(0.99 0.012 85 / 26%); transform: rotate(-2deg); }
 
 @media (max-height: 680px) {
-  .care-action { max-width: 148px; font-size: 1.3rem; }
+  .central-microphone { width: 5.5rem; height: 5.5rem; }
+  .care-action { width: 11.25rem; height: 10rem; min-width: 0; font-size: 1.35rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
