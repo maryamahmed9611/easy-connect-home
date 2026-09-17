@@ -1,0 +1,3 @@
+- [ ] Build the Smart Elderly Care three-screen flow.
+- [ ] Apply the warm golden-hour, handcrafted visual direction and friendly greeting.
+- [ ] Verify readable, no-scroll phone layouts and interactions.
