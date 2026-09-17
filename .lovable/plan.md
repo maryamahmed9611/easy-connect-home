@@ -1,7 +1,7 @@
 # Smart Elderly Care Home Flow
 
 ## Build
-- Replace the placeholder with a phone-first home screen containing exactly three large, vertically stacked action buttons.
+- Replace the placeholder with a phone-first home screen containing exactly three large, 100px-plus circular or soft-rounded-square action buttons clustered in a gentle orbit around a central upper-middle microphone: one action slightly above center and two below on either side, centered within one phone screen without scrolling.
 - Add clear medical, shopping, family, and microphone icons with large labels and accessible names.
 - Create a simple listening view for each action, with a pulsing microphone, “Listening...” status, and an empty read-only speech text area.
 - Let the listening view advance to a confirmation view with a checkmark and a large Done button returning home.
