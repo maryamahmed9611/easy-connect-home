@@ -1,4 +1,4 @@
-- [ ] Build the Smart Elderly Care three-screen flow.
-- [ ] Apply the warm golden-hour, handcrafted visual direction and friendly greeting.
-- [ ] Arrange the three large actions in a gentle orbit around a central microphone.
-- [ ] Verify readable, no-scroll phone layouts and interactions.
+- [x] Build the Smart Elderly Care three-screen flow.
+- [x] Apply the warm golden-hour, handcrafted visual direction and friendly greeting.
+- [x] Arrange the three large actions in a gentle orbit around a central microphone.
+- [x] Verify readable, no-scroll phone layouts and interactions.
