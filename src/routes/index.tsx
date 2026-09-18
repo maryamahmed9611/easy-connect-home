@@ -335,15 +335,12 @@ function Index() {
     return (
       <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
         <OrganicShapes />
-        <section className="relative z-10 flex w-full max-w-md flex-col items-center text-center">
+        <section className="relative z-10 flex w-full max-w-md flex-col items-center text-center" aria-live="polite">
           <div className="grid size-40 place-items-center rounded-full bg-success text-success-foreground shadow-warm" aria-hidden="true">
             <Check className="size-24" strokeWidth={3} />
           </div>
           <p className="mt-8 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
           <h1 className="mt-3 text-4xl font-extrabold leading-tight text-foreground">Request confirmed</h1>
-          <Button onClick={() => setScreen("home")} className="mt-12 min-h-20 w-full rounded-2xl px-8 text-3xl">
-            Done
-          </Button>
         </section>
       </main>
     );
