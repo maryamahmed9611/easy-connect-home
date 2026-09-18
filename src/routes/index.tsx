@@ -68,7 +68,15 @@ const CONFIRMATION_SPEECH: Record<LanguageCode, string> = {
   "kn-IN": "ನಿಮ್ಮ ವಿನಂತಿಯನ್ನು ದೃಢೀಕರಿಸಲಾಗಿದೆ",
 };
 
+const LANGUAGE_KEY = "care-language";
+const PROFILE_KEY = "care-profile";
+
+type FamilyContact = { name: string; phone: string };
+type CareProfile = { elderName: string; contacts: FamilyContact[] };
+
 function Index() {
+  const [hydrated, setHydrated] = useState(false);
+  const [profile, setProfile] = useState<CareProfile | null>(null);
   const [language, setLanguage] = useState<LanguageCode | null>(null);
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedAction, setSelectedAction] = useState<CareAction>("Medical Support");
@@ -79,10 +87,22 @@ function Index() {
   const speechReceivedRef = useRef(false);
 
   useEffect(() => {
-    const savedLanguage = window.sessionStorage.getItem("care-language");
+    const savedLanguage = window.localStorage.getItem(LANGUAGE_KEY);
     if (savedLanguage === "en-IN" || savedLanguage === "hi-IN" || savedLanguage === "kn-IN") {
       setLanguage(savedLanguage);
     }
+    const savedProfile = window.localStorage.getItem(PROFILE_KEY);
+    if (savedProfile) {
+      try {
+        const parsed = JSON.parse(savedProfile) as CareProfile;
+        if (parsed && typeof parsed.elderName === "string") {
+          setProfile({ elderName: parsed.elderName, contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [] });
+        }
+      } catch {
+        // A damaged saved profile is ignored so setup can be completed again.
+      }
+    }
+    setHydrated(true);
   }, []);
 
   useEffect(() => () => {
@@ -91,8 +111,13 @@ function Index() {
     window.speechSynthesis?.cancel();
   }, []);
 
+  const saveProfile = (newProfile: CareProfile) => {
+    window.localStorage.setItem(PROFILE_KEY, JSON.stringify(newProfile));
+    setProfile(newProfile);
+  };
+
   const chooseLanguage = (code: LanguageCode) => {
-    window.sessionStorage.setItem("care-language", code);
+    window.localStorage.setItem(LANGUAGE_KEY, code);
     setLanguage(code);
     setScreen("home");
   };
