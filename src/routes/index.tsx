@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { HeartPulse, Mic, ShoppingBasket, UsersRound, Check, ArrowLeft, Languages } from "lucide-react";
+import { HeartPulse, Mic, ShoppingBasket, UsersRound, Check, ArrowLeft, Languages, HeartHandshake } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -67,7 +68,15 @@ const CONFIRMATION_SPEECH: Record<LanguageCode, string> = {
   "kn-IN": "ನಿಮ್ಮ ವಿನಂತಿಯನ್ನು ದೃಢೀಕರಿಸಲಾಗಿದೆ",
 };
 
+const LANGUAGE_KEY = "care-language";
+const PROFILE_KEY = "care-profile";
+
+type FamilyContact = { name: string; phone: string };
+type CareProfile = { elderName: string; contacts: FamilyContact[] };
+
 function Index() {
+  const [hydrated, setHydrated] = useState(false);
+  const [profile, setProfile] = useState<CareProfile | null>(null);
   const [language, setLanguage] = useState<LanguageCode | null>(null);
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedAction, setSelectedAction] = useState<CareAction>("Medical Support");
@@ -78,10 +87,22 @@ function Index() {
   const speechReceivedRef = useRef(false);
 
   useEffect(() => {
-    const savedLanguage = window.sessionStorage.getItem("care-language");
+    const savedLanguage = window.localStorage.getItem(LANGUAGE_KEY);
     if (savedLanguage === "en-IN" || savedLanguage === "hi-IN" || savedLanguage === "kn-IN") {
       setLanguage(savedLanguage);
     }
+    const savedProfile = window.localStorage.getItem(PROFILE_KEY);
+    if (savedProfile) {
+      try {
+        const parsed = JSON.parse(savedProfile) as CareProfile;
+        if (parsed && typeof parsed.elderName === "string") {
+          setProfile({ elderName: parsed.elderName, contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [] });
+        }
+      } catch {
+        // A damaged saved profile is ignored so setup can be completed again.
+      }
+    }
+    setHydrated(true);
   }, []);
 
   useEffect(() => () => {
@@ -90,8 +111,13 @@ function Index() {
     window.speechSynthesis?.cancel();
   }, []);
 
+  const saveProfile = (newProfile: CareProfile) => {
+    window.localStorage.setItem(PROFILE_KEY, JSON.stringify(newProfile));
+    setProfile(newProfile);
+  };
+
   const chooseLanguage = (code: LanguageCode) => {
-    window.sessionStorage.setItem("care-language", code);
+    window.localStorage.setItem(LANGUAGE_KEY, code);
     setLanguage(code);
     setScreen("home");
   };
@@ -208,6 +234,21 @@ function Index() {
     };
   }, [language, screen]);
 
+  useEffect(() => {
+    if (screen !== "confirmation") return;
+
+    const homeTimer = window.setTimeout(() => setScreen("home"), 4500);
+    return () => window.clearTimeout(homeTimer);
+  }, [screen]);
+
+  if (!hydrated) {
+    return <main className="app-background min-h-svh" aria-hidden="true" />;
+  }
+
+  if (!profile) {
+    return <SetupScreen onComplete={saveProfile} />;
+  }
+
   if (!language) {
     return (
       <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
@@ -294,15 +335,12 @@ function Index() {
     return (
       <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
         <OrganicShapes />
-        <section className="relative z-10 flex w-full max-w-md flex-col items-center text-center">
+        <section className="relative z-10 flex w-full max-w-md flex-col items-center text-center" aria-live="polite">
           <div className="grid size-40 place-items-center rounded-full bg-success text-success-foreground shadow-warm" aria-hidden="true">
             <Check className="size-24" strokeWidth={3} />
           </div>
           <p className="mt-8 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
           <h1 className="mt-3 text-4xl font-extrabold leading-tight text-foreground">Request confirmed</h1>
-          <Button onClick={() => setScreen("home")} className="mt-12 min-h-20 w-full rounded-2xl px-8 text-3xl">
-            Done
-          </Button>
         </section>
       </main>
     );
@@ -314,14 +352,16 @@ function Index() {
       <section className="relative z-10 flex h-[calc(100svh-2rem)] max-h-[820px] w-full max-w-lg flex-col items-center">
         <header className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pt-1">
           <div className="min-w-0">
-            <p className="text-2xl font-extrabold leading-tight text-foreground">Good morning,</p>
+            <p className="text-2xl font-extrabold leading-tight text-foreground">
+              Good morning{profile.elderName ? `, ${profile.elderName}` : ","}
+            </p>
             <h1 className="text-2xl font-extrabold leading-tight text-foreground">we’re here for you</h1>
           </div>
           <Button
             variant="quiet"
             size="icon"
             onClick={() => {
-              window.sessionStorage.removeItem("care-language");
+              window.localStorage.removeItem(LANGUAGE_KEY);
               setLanguage(null);
             }}
             aria-label="Change language"
@@ -361,6 +401,97 @@ function Index() {
           />
         </div>
       </section>
+    </main>
+  );
+}
+
+function SetupScreen({ onComplete }: { onComplete: (profile: CareProfile) => void }) {
+  const [elderName, setElderName] = useState("");
+  const [contacts, setContacts] = useState<FamilyContact[]>([
+    { name: "", phone: "" },
+    { name: "", phone: "" },
+    { name: "", phone: "" },
+  ]);
+  const [error, setError] = useState("");
+
+  const updateContact = (index: number, field: keyof FamilyContact, value: string) => {
+    setContacts((current) => current.map((contact, position) => (position === index ? { ...contact, [field]: value } : contact)));
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedName = elderName.trim();
+    const filledContacts = contacts
+      .map((contact) => ({ name: contact.name.trim(), phone: contact.phone.trim() }))
+      .filter((contact) => contact.name && contact.phone);
+
+    if (!trimmedName) {
+      setError("Please enter the name of the person using this app.");
+      return;
+    }
+    if (filledContacts.length < 2) {
+      setError("Please add at least two family contacts with a name and a phone number.");
+      return;
+    }
+
+    setError("");
+    onComplete({ elderName: trimmedName, contacts: filledContacts });
+  };
+
+  return (
+    <main className="app-background relative min-h-svh overflow-hidden px-6 py-8">
+      <OrganicShapes />
+      <form onSubmit={handleSubmit} className="relative z-10 mx-auto flex w-full max-w-md flex-col items-center">
+        <HeartHandshake className="size-14 text-microphone" strokeWidth={2.5} aria-hidden="true" />
+        <h1 className="mt-4 text-center text-3xl font-extrabold leading-tight text-foreground">Let’s set things up</h1>
+        <p className="mt-3 text-center text-xl font-bold leading-snug text-muted-foreground">
+          A family member can fill this in once. We will remember it.
+        </p>
+
+        <label htmlFor="elder-name" className="mt-8 w-full text-2xl font-bold text-foreground">
+          Name of the person using this app
+        </label>
+        <Input
+          id="elder-name"
+          value={elderName}
+          onChange={(event) => setElderName(event.target.value)}
+          placeholder="Name"
+          className="mt-3 h-16 w-full rounded-2xl border-4 border-border bg-card px-4 text-2xl text-card-foreground shadow-soft md:text-2xl"
+        />
+
+        <h2 className="mt-8 w-full text-2xl font-bold text-foreground">Family contacts</h2>
+        {contacts.map((contact, index) => (
+          <div key={index} className="mt-4 w-full rounded-3xl bg-card/70 p-4 shadow-soft">
+            <label htmlFor={`contact-name-${index}`} className="text-xl font-bold text-foreground">
+              Contact {index + 1}
+              {index === 2 ? " (optional)" : ""}
+            </label>
+            <Input
+              id={`contact-name-${index}`}
+              value={contact.name}
+              onChange={(event) => updateContact(index, "name", event.target.value)}
+              placeholder="Name"
+              className="mt-2 h-14 w-full rounded-2xl border-4 border-border bg-card px-4 text-xl text-card-foreground md:text-xl"
+            />
+            <Input
+              id={`contact-phone-${index}`}
+              type="tel"
+              inputMode="tel"
+              aria-label={`Phone number for contact ${index + 1}`}
+              value={contact.phone}
+              onChange={(event) => updateContact(index, "phone", event.target.value)}
+              placeholder="Phone number"
+              className="mt-3 h-14 w-full rounded-2xl border-4 border-border bg-card px-4 text-xl text-card-foreground md:text-xl"
+            />
+          </div>
+        ))}
+
+        {error ? <p className="mt-5 w-full text-xl font-bold leading-snug text-foreground" role="alert">{error}</p> : null}
+
+        <Button type="submit" className="mb-4 mt-8 min-h-20 w-full rounded-2xl px-8 text-3xl">
+          Save and continue
+        </Button>
+      </form>
     </main>
   );
 }
