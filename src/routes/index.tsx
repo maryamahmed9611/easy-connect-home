@@ -234,6 +234,21 @@ function Index() {
     };
   }, [language, screen]);
 
+  useEffect(() => {
+    if (screen !== "confirmation") return;
+
+    const homeTimer = window.setTimeout(() => setScreen("home"), 4500);
+    return () => window.clearTimeout(homeTimer);
+  }, [screen]);
+
+  if (!hydrated) {
+    return <main className="app-background min-h-svh" aria-hidden="true" />;
+  }
+
+  if (!profile) {
+    return <SetupScreen onComplete={saveProfile} />;
+  }
+
   if (!language) {
     return (
       <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
