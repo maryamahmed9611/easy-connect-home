@@ -352,14 +352,16 @@ function Index() {
       <section className="relative z-10 flex h-[calc(100svh-2rem)] max-h-[820px] w-full max-w-lg flex-col items-center">
         <header className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pt-1">
           <div className="min-w-0">
-            <p className="text-2xl font-extrabold leading-tight text-foreground">Good morning,</p>
+            <p className="text-2xl font-extrabold leading-tight text-foreground">
+              Good morning{profile.elderName ? `, ${profile.elderName}` : ","}
+            </p>
             <h1 className="text-2xl font-extrabold leading-tight text-foreground">we’re here for you</h1>
           </div>
           <Button
             variant="quiet"
             size="icon"
             onClick={() => {
-              window.sessionStorage.removeItem("care-language");
+              window.localStorage.removeItem(LANGUAGE_KEY);
               setLanguage(null);
             }}
             aria-label="Change language"
