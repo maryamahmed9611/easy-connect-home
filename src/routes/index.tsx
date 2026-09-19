@@ -247,16 +247,18 @@ function Index() {
   }
 
   if (!profile || editingProfile) {
+    const setupSharedProps = {
+      initialProfile: profile,
+      isEditing: editingProfile,
+      onComplete: (newProfile: CareProfile) => {
+        saveProfile(newProfile);
+        setEditingProfile(false);
+      },
+    };
     return (
-      <SetupScreen
-        initialProfile={profile}
-        isEditing={editingProfile}
-        onCancel={profile ? () => setEditingProfile(false) : undefined}
-        onComplete={(newProfile) => {
-          saveProfile(newProfile);
-          setEditingProfile(false);
-        }}
-      />
+      profile
+        ? <SetupScreen {...setupSharedProps} onCancel={() => setEditingProfile(false)} />
+        : <SetupScreen {...setupSharedProps} />
     );
   }
 
