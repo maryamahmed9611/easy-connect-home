@@ -2,3 +2,7 @@
 - [x] Apply the warm golden-hour, handcrafted visual direction and friendly greeting.
 - [x] Arrange the three large actions in a gentle orbit around a central microphone.
 - [x] Verify readable, no-scroll phone layouts and interactions.
+- [ ] Add Enter-key progression across setup fields.
+- [ ] Add editable saved details from the home screen.
+- [ ] Apply the selected calm, premium orbit design without reducing accessibility.
+- [ ] Verify setup editing, keyboard progression, and phone layouts.
