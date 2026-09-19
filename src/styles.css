@@ -20,7 +20,7 @@
 
 @theme inline {
   --font-sans: var(--font-friendly);
-  --font-heading: var(--font-heading);
+  --font-heading: var(--font-display);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -82,7 +82,7 @@
 
 :root {
   --font-friendly: "Nunito Sans", ui-rounded, system-ui, sans-serif;
-  --font-heading: "Lora", Georgia, serif;
+  --font-display: "Lora", Georgia, serif;
   --radius: 0.625rem;
   --background: oklch(0.9543 0.0136 78.26);
   --background-start: oklch(0.9543 0.0136 78.26);
