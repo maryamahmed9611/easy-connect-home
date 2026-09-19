@@ -402,7 +402,7 @@ function Index() {
           <Mic className="size-14" strokeWidth={2.5} />
         </Button>
 
-        <div className="relative mt-4 min-h-0 w-full flex-1" aria-label="Care options">
+        <div className="relative mt-4 h-[26rem] w-full shrink-0" aria-label="Care options">
           <CareButton
             label="Medical Support"
             icon={<HeartPulse className="size-16" strokeWidth={2.4} />}
@@ -481,7 +481,7 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
         <HeartHandshake className="size-14 text-microphone" strokeWidth={2.5} aria-hidden="true" />
         <h1 className="font-heading mt-4 text-center text-4xl font-bold leading-tight text-foreground">{isEditing ? "Edit your details" : "Let’s set things up"}</h1>
         <p className="mt-3 text-center text-xl font-bold leading-snug text-muted-foreground">
-          A family member can fill this in once. We will remember it.
+          {isEditing ? "Update the saved name and family contacts." : "A family member can fill this in once. We will remember it."}
         </p>
 
         <label htmlFor="elder-name" className="mt-8 w-full text-2xl font-bold text-foreground">
@@ -547,11 +547,11 @@ function CareButton({ label, icon, onClick, className }: { label: CareAction; ic
       variant="quiet"
       type="button"
       onClick={onClick}
-      className={`care-action absolute flex aspect-[0.9] h-auto w-[calc(50%-0.5rem)] max-w-56 min-w-[168px] flex-col items-center justify-center gap-3 rounded-[2.5rem] border border-card/60 px-4 text-center text-2xl font-extrabold leading-tight shadow-warm transition-transform duration-200 focus-visible:z-30 focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background active:scale-[0.97] ${className}`}
+      className={`care-action absolute flex aspect-[0.9] h-auto w-[calc(50%-0.5rem)] max-w-56 min-w-[168px] whitespace-normal flex-col items-center justify-center gap-3 rounded-[2.5rem] border border-card/60 px-3 text-center text-2xl font-extrabold leading-tight shadow-warm transition-transform duration-200 focus-visible:z-30 focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background active:scale-[0.97] ${className}`}
       aria-label={label}
     >
       <span className="illustrated-icon grid size-20 place-items-center rounded-full" aria-hidden="true">{icon}</span>
-      <span>{label}</span>
+      <span className="max-w-full text-balance">{label}</span>
     </Button>
   );
 }
