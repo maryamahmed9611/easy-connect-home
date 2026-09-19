@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { HeartPulse, Mic, ShoppingBasket, UsersRound, Check, ArrowLeft, Languages, HeartHandshake } from "lucide-react";
+import { HeartPulse, Mic, ShoppingBasket, UsersRound, Check, ArrowLeft, Languages, HeartHandshake, PencilLine } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/ui/button";
@@ -82,6 +82,7 @@ function Index() {
   const [selectedAction, setSelectedAction] = useState<CareAction>("Medical Support");
   const [transcript, setTranscript] = useState("");
   const [speechMessage, setSpeechMessage] = useState("");
+  const [editingProfile, setEditingProfile] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const recognitionActiveRef = useRef(false);
   const speechReceivedRef = useRef(false);
@@ -245,8 +246,20 @@ function Index() {
     return <main className="app-background min-h-svh" aria-hidden="true" />;
   }
 
-  if (!profile) {
-    return <SetupScreen onComplete={saveProfile} />;
+  if (!profile || editingProfile) {
+    const setupSharedProps = {
+      initialProfile: profile,
+      isEditing: editingProfile,
+      onComplete: (newProfile: CareProfile) => {
+        saveProfile(newProfile);
+        setEditingProfile(false);
+      },
+    };
+    return (
+      profile
+        ? <SetupScreen {...setupSharedProps} onCancel={() => setEditingProfile(false)} />
+        : <SetupScreen {...setupSharedProps} />
+    );
   }
 
   if (!language) {
@@ -255,13 +268,13 @@ function Index() {
         <OrganicShapes />
         <section className="relative z-10 flex w-full max-w-md flex-col items-center text-center">
           <Languages className="size-16 text-microphone" strokeWidth={2.5} aria-hidden="true" />
-          <h1 className="mt-5 text-4xl font-extrabold leading-tight text-foreground">Choose your language</h1>
+          <h1 className="font-heading mt-5 text-4xl font-bold leading-tight text-foreground">Choose your language</h1>
           <div className="mt-8 grid w-full gap-4">
             {LANGUAGES.map((option) => (
               <Button
                 key={option.code}
                 onClick={() => chooseLanguage(option.code)}
-                className="min-h-24 w-full rounded-2xl bg-card px-6 text-3xl font-extrabold text-card-foreground shadow-warm hover:bg-card"
+                className="min-h-24 w-full rounded-2xl border border-border/60 bg-card px-6 text-3xl font-extrabold text-card-foreground shadow-warm hover:bg-card"
               >
                 {option.label}
               </Button>
@@ -292,7 +305,7 @@ function Index() {
             <Mic className="size-16" strokeWidth={2.5} />
           </div>
           <p className="mt-8 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
-          <h1 className="mt-2 text-4xl font-extrabold text-foreground">Listening...</h1>
+           <h1 className="font-heading mt-2 text-4xl font-bold text-foreground">Listening...</h1>
           <label htmlFor="spoken-text" className="mt-8 self-start text-2xl font-bold text-foreground">
             What I heard
           </label>
@@ -323,7 +336,7 @@ function Index() {
             <span className="size-6 rounded-full bg-current" />
           </div>
           <p className="mt-6 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
-          <h1 className="mt-3 max-w-sm text-4xl font-extrabold leading-tight text-foreground">
+           <h1 className="font-heading mt-3 max-w-sm text-4xl font-bold leading-tight text-foreground">
             Support is on the way, please wait
           </h1>
         </section>
@@ -340,7 +353,7 @@ function Index() {
             <Check className="size-24" strokeWidth={3} />
           </div>
           <p className="mt-8 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
-          <h1 className="mt-3 text-4xl font-extrabold leading-tight text-foreground">Request confirmed</h1>
+           <h1 className="font-heading mt-3 text-4xl font-bold leading-tight text-foreground">Request confirmed</h1>
         </section>
       </main>
     );
@@ -350,12 +363,22 @@ function Index() {
     <main className="app-background relative flex min-h-svh items-center justify-center overflow-hidden px-2 py-4 sm:px-4">
       <OrganicShapes />
       <section className="relative z-10 flex h-[calc(100svh-2rem)] max-h-[820px] w-full max-w-lg flex-col items-center">
-        <header className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pt-1">
-          <div className="min-w-0">
-            <p className="text-2xl font-extrabold leading-tight text-foreground">
+        <header className="grid w-full grid-cols-[3rem_minmax(0,1fr)_3rem] items-start gap-3 pt-1">
+          <Button
+            variant="quiet"
+            size="icon"
+            onClick={() => setEditingProfile(true)}
+            aria-label="Edit details"
+            title="Edit details"
+            className="size-12 shrink-0 rounded-full border border-border/50 bg-card/80 text-foreground shadow-soft hover:bg-card"
+          >
+            <PencilLine className="size-6" strokeWidth={2} />
+          </Button>
+          <div className="min-w-0 text-center">
+            <p className="font-heading text-2xl font-bold leading-tight text-foreground">
               Good morning{profile.elderName ? `, ${profile.elderName}` : ","}
             </p>
-            <h1 className="text-2xl font-extrabold leading-tight text-foreground">we’re here for you</h1>
+            <h1 className="font-heading text-2xl font-bold leading-tight text-foreground">we’re here for you</h1>
           </div>
           <Button
             variant="quiet"
@@ -365,7 +388,8 @@ function Index() {
               setLanguage(null);
             }}
             aria-label="Change language"
-            className="size-12 shrink-0 rounded-full bg-card/70 text-foreground shadow-soft hover:bg-card"
+            title="Change language"
+            className="size-12 shrink-0 rounded-full border border-border/50 bg-card/80 text-foreground shadow-soft hover:bg-card"
           >
             <Languages className="size-6" strokeWidth={2.5} />
           </Button>
@@ -380,24 +404,24 @@ function Index() {
           <Mic className="size-14" strokeWidth={2.5} />
         </Button>
 
-        <div className="relative mt-4 min-h-0 w-full flex-1" aria-label="Care options">
+        <div className="relative mt-4 h-[26rem] w-full shrink-0" aria-label="Care options">
           <CareButton
             label="Medical Support"
             icon={<HeartPulse className="size-16" strokeWidth={2.4} />}
             onClick={() => startListening("Medical Support")}
-            className="left-1/2 top-0 -translate-x-1/2 bg-medical text-medical-foreground"
+            className="care-medical left-1/2 top-0 -translate-x-1/2 text-medical-foreground"
           />
           <CareButton
             label="Daily Needs"
             icon={<ShoppingBasket className="size-16" strokeWidth={2.4} />}
             onClick={() => startListening("Daily Needs")}
-            className="bottom-0 left-0 bg-daily text-daily-foreground"
+            className="care-daily bottom-0 left-0 text-daily-foreground"
           />
           <CareButton
             label="Talk to Family"
             icon={<UsersRound className="size-16" strokeWidth={2.4} />}
             onClick={() => startListening("Talk to Family")}
-            className="bottom-0 right-0 bg-family text-family-foreground"
+            className="care-family bottom-0 right-0 text-family-foreground"
           />
         </div>
       </section>
@@ -405,13 +429,9 @@ function Index() {
   );
 }
 
-function SetupScreen({ onComplete }: { onComplete: (profile: CareProfile) => void }) {
-  const [elderName, setElderName] = useState("");
-  const [contacts, setContacts] = useState<FamilyContact[]>([
-    { name: "", phone: "" },
-    { name: "", phone: "" },
-    { name: "", phone: "" },
-  ]);
+function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { initialProfile: CareProfile | null; isEditing: boolean; onCancel?: () => void; onComplete: (profile: CareProfile) => void }) {
+  const [elderName, setElderName] = useState(initialProfile?.elderName ?? "");
+  const [contacts, setContacts] = useState<FamilyContact[]>(() => Array.from({ length: 3 }, (_, index) => initialProfile?.contacts[index] ?? { name: "", phone: "" }));
   const [error, setError] = useState("");
 
   const updateContact = (index: number, field: keyof FamilyContact, value: string) => {
@@ -429,7 +449,12 @@ function SetupScreen({ onComplete }: { onComplete: (profile: CareProfile) => voi
       setError("Please enter the name of the person using this app.");
       return;
     }
-    if (filledContacts.length < 2) {
+    const hasIncompleteContact = contacts.some((contact) => Boolean(contact.name.trim()) !== Boolean(contact.phone.trim()));
+    if (hasIncompleteContact) {
+      setError("Please add both a name and phone number for each contact, or leave both fields empty.");
+      return;
+    }
+    if (!isEditing && filledContacts.length < 2) {
       setError("Please add at least two family contacts with a name and a phone number.");
       return;
     }
@@ -438,14 +463,27 @@ function SetupScreen({ onComplete }: { onComplete: (profile: CareProfile) => voi
     onComplete({ elderName: trimmedName, contacts: filledContacts });
   };
 
+  const moveToNextField = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return;
+    const form = event.currentTarget.form;
+    if (!form) return;
+    const fields = Array.from(form.querySelectorAll<HTMLInputElement>("[data-setup-field]"));
+    const currentIndex = fields.indexOf(event.currentTarget);
+    const nextField = fields[currentIndex + 1];
+    if (nextField) {
+      event.preventDefault();
+      nextField.focus();
+    }
+  };
+
   return (
     <main className="app-background relative min-h-svh overflow-hidden px-6 py-8">
       <OrganicShapes />
       <form onSubmit={handleSubmit} className="relative z-10 mx-auto flex w-full max-w-md flex-col items-center">
         <HeartHandshake className="size-14 text-microphone" strokeWidth={2.5} aria-hidden="true" />
-        <h1 className="mt-4 text-center text-3xl font-extrabold leading-tight text-foreground">Let’s set things up</h1>
+        <h1 className="font-heading mt-4 text-center text-4xl font-bold leading-tight text-foreground">{isEditing ? "Edit your details" : "Let’s set things up"}</h1>
         <p className="mt-3 text-center text-xl font-bold leading-snug text-muted-foreground">
-          A family member can fill this in once. We will remember it.
+          {isEditing ? "Update the saved name and family contacts." : "A family member can fill this in once. We will remember it."}
         </p>
 
         <label htmlFor="elder-name" className="mt-8 w-full text-2xl font-bold text-foreground">
@@ -453,13 +491,15 @@ function SetupScreen({ onComplete }: { onComplete: (profile: CareProfile) => voi
         </label>
         <Input
           id="elder-name"
+          data-setup-field
           value={elderName}
           onChange={(event) => setElderName(event.target.value)}
+          onKeyDown={moveToNextField}
           placeholder="Name"
           className="mt-3 h-16 w-full rounded-2xl border-4 border-border bg-card px-4 text-2xl text-card-foreground shadow-soft md:text-2xl"
         />
 
-        <h2 className="mt-8 w-full text-2xl font-bold text-foreground">Family contacts</h2>
+        <h2 className="font-heading mt-8 w-full text-3xl font-bold text-foreground">Family contacts</h2>
         {contacts.map((contact, index) => (
           <div key={index} className="mt-4 w-full rounded-3xl bg-card/70 p-4 shadow-soft">
             <label htmlFor={`contact-name-${index}`} className="text-xl font-bold text-foreground">
@@ -468,18 +508,22 @@ function SetupScreen({ onComplete }: { onComplete: (profile: CareProfile) => voi
             </label>
             <Input
               id={`contact-name-${index}`}
+              data-setup-field
               value={contact.name}
               onChange={(event) => updateContact(index, "name", event.target.value)}
+              onKeyDown={moveToNextField}
               placeholder="Name"
               className="mt-2 h-14 w-full rounded-2xl border-4 border-border bg-card px-4 text-xl text-card-foreground md:text-xl"
             />
             <Input
               id={`contact-phone-${index}`}
+              data-setup-field
               type="tel"
               inputMode="tel"
               aria-label={`Phone number for contact ${index + 1}`}
               value={contact.phone}
               onChange={(event) => updateContact(index, "phone", event.target.value)}
+              onKeyDown={moveToNextField}
               placeholder="Phone number"
               className="mt-3 h-14 w-full rounded-2xl border-4 border-border bg-card px-4 text-xl text-card-foreground md:text-xl"
             />
@@ -488,9 +532,12 @@ function SetupScreen({ onComplete }: { onComplete: (profile: CareProfile) => voi
 
         {error ? <p className="mt-5 w-full text-xl font-bold leading-snug text-foreground" role="alert">{error}</p> : null}
 
-        <Button type="submit" className="mb-4 mt-8 min-h-20 w-full rounded-2xl px-8 text-3xl">
-          Save and continue
-        </Button>
+        <div className="mb-4 mt-8 grid w-full gap-3">
+          <Button type="submit" className="min-h-20 w-full rounded-2xl px-8 text-3xl">
+            {isEditing ? "Save details" : "Save and continue"}
+          </Button>
+          {onCancel ? <Button type="button" variant="quiet" onClick={onCancel} className="min-h-14 w-full text-xl">Cancel</Button> : null}
+        </div>
       </form>
     </main>
   );
@@ -498,15 +545,16 @@ function SetupScreen({ onComplete }: { onComplete: (profile: CareProfile) => voi
 
 function CareButton({ label, icon, onClick, className }: { label: CareAction; icon: React.ReactNode; onClick: () => void; className: string }) {
   return (
-    <button
+    <Button
+      variant="quiet"
       type="button"
       onClick={onClick}
-      className={`care-action absolute flex aspect-[0.9] w-[calc(50%-0.375rem)] max-w-56 min-w-[168px] flex-col items-center justify-center gap-3 rounded-[2.75rem] px-4 text-center text-2xl font-extrabold leading-tight shadow-warm transition-transform duration-200 focus-visible:z-30 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background active:scale-[0.97] ${className}`}
+      className={`care-action absolute flex aspect-[0.9] h-auto w-[calc(50%-0.5rem)] max-w-56 min-w-[168px] whitespace-normal flex-col items-center justify-center gap-3 rounded-[2.5rem] border border-card/60 px-3 text-center text-2xl font-extrabold leading-tight shadow-warm transition-transform duration-200 focus-visible:z-30 focus-visible:ring-4 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background active:scale-[0.97] ${className}`}
       aria-label={label}
     >
-      <span className="illustrated-icon grid size-16 place-items-center rounded-full" aria-hidden="true">{icon}</span>
-      <span>{label}</span>
-    </button>
+      <span className="illustrated-icon grid size-20 place-items-center rounded-full" aria-hidden="true">{icon}</span>
+      <span className="max-w-full text-balance">{label}</span>
+    </Button>
   );
 }
 
