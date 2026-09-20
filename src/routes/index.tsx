@@ -365,7 +365,14 @@ function Index() {
             className="mt-3 h-28 w-full resize-none rounded-3xl border-4 border-border bg-card p-4 text-2xl text-card-foreground shadow-soft focus:outline-none"
           />
           {speechMessage ? <p className="mt-4 text-2xl font-bold leading-snug text-foreground" role="alert">{speechMessage}</p> : null}
-          <Button onClick={() => setScreen("waiting")} className="mt-7 min-h-16 w-full rounded-2xl px-8 text-2xl">
+          <Button
+            onClick={() => {
+              stopRecognition();
+              void submitRequest(selectedAction, transcriptRef.current || transcript);
+              setScreen("waiting");
+            }}
+            className="mt-7 min-h-16 w-full rounded-2xl px-8 text-2xl"
+          >
             Confirm Request
           </Button>
         </section>
