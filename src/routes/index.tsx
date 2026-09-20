@@ -100,7 +100,7 @@ function Index() {
       try {
         const parsed = JSON.parse(savedProfile) as CareProfile;
         if (parsed && typeof parsed.elderName === "string") {
-          setProfile({ elderName: parsed.elderName, contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [] });
+          setProfile({ elderName: parsed.elderName, contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [], ...(parsed.shop ? { shop: parsed.shop } : {}) });
         }
       } catch {
         // A damaged saved profile is ignored so setup can be completed again.
