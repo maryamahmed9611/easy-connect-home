@@ -214,7 +214,10 @@ function Index() {
       if (!recognitionActiveRef.current) return;
       recognitionActiveRef.current = false;
       recognitionRef.current = null;
-      if (speechReceivedRef.current) setScreen("waiting");
+      if (speechReceivedRef.current) {
+        void submitRequest(action, transcriptRef.current);
+        setScreen("waiting");
+      }
     };
 
     try {
@@ -229,9 +232,24 @@ function Index() {
   useEffect(() => {
     if (screen !== "waiting") return;
 
-    const confirmationTimer = window.setTimeout(() => setScreen("confirmation"), 3000);
-    return () => window.clearTimeout(confirmationTimer);
-  }, [screen]);
+    if (!requestId) {
+      const confirmationTimer = window.setTimeout(() => setScreen("confirmation"), 3000);
+      return () => window.clearTimeout(confirmationTimer);
+    }
+
+    let cancelled = false;
+    const checkStatus = async () => {
+      const { data } = await supabase.from("requests").select("status").eq("id", requestId).maybeSingle();
+      if (!cancelled && data?.status === "confirmed") setScreen("confirmation");
+    };
+
+    void checkStatus();
+    const statusInterval = window.setInterval(() => void checkStatus(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(statusInterval);
+    };
+  }, [screen, requestId]);
 
   useEffect(() => {
     if (screen !== "confirmation" || !language || !("speechSynthesis" in window)) return;
