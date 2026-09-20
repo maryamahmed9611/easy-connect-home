@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -72,7 +73,7 @@ const LANGUAGE_KEY = "care-language";
 const PROFILE_KEY = "care-profile";
 
 type FamilyContact = { name: string; phone: string };
-type CareProfile = { elderName: string; contacts: FamilyContact[] };
+type CareProfile = { elderName: string; contacts: FamilyContact[]; shop?: FamilyContact };
 
 function Index() {
   const [hydrated, setHydrated] = useState(false);
@@ -83,9 +84,11 @@ function Index() {
   const [transcript, setTranscript] = useState("");
   const [speechMessage, setSpeechMessage] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const recognitionActiveRef = useRef(false);
   const speechReceivedRef = useRef(false);
+  const transcriptRef = useRef("");
 
   useEffect(() => {
     const savedLanguage = window.localStorage.getItem(LANGUAGE_KEY);
