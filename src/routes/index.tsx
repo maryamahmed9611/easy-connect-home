@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -72,7 +73,7 @@ const LANGUAGE_KEY = "care-language";
 const PROFILE_KEY = "care-profile";
 
 type FamilyContact = { name: string; phone: string };
-type CareProfile = { elderName: string; contacts: FamilyContact[] };
+type CareProfile = { elderName: string; contacts: FamilyContact[]; shop?: FamilyContact };
 
 function Index() {
   const [hydrated, setHydrated] = useState(false);
@@ -83,9 +84,11 @@ function Index() {
   const [transcript, setTranscript] = useState("");
   const [speechMessage, setSpeechMessage] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const recognitionActiveRef = useRef(false);
   const speechReceivedRef = useRef(false);
+  const transcriptRef = useRef("");
 
   useEffect(() => {
     const savedLanguage = window.localStorage.getItem(LANGUAGE_KEY);
@@ -97,7 +100,7 @@ function Index() {
       try {
         const parsed = JSON.parse(savedProfile) as CareProfile;
         if (parsed && typeof parsed.elderName === "string") {
-          setProfile({ elderName: parsed.elderName, contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [] });
+          setProfile({ elderName: parsed.elderName, contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [], ...(parsed.shop ? { shop: parsed.shop } : {}) });
         }
       } catch {
         // A damaged saved profile is ignored so setup can be completed again.
@@ -129,9 +132,35 @@ function Index() {
     recognitionRef.current = null;
   };
 
+  const submitRequest = async (action: CareAction, details: string) => {
+    if (action === "Talk to Family") {
+      setRequestId(null);
+      return;
+    }
+    const requestType = action === "Medical Support" ? "medical" : "groceries";
+    const phone =
+      action === "Medical Support"
+        ? profile?.contacts[0]?.phone ?? ""
+        : profile?.shop?.phone ?? profile?.contacts[1]?.phone ?? "";
+
+    const { data, error } = await supabase
+      .from("requests")
+      .insert({ name: profile?.elderName ?? "", requestType, details, phone })
+      .select("id")
+      .single();
+
+    if (error || !data) {
+      setRequestId(null);
+      return;
+    }
+    setRequestId(data.id);
+  };
+
   const startListening = (action: CareAction) => {
     setSelectedAction(action);
     setTranscript("");
+    transcriptRef.current = "";
+    setRequestId(null);
     setSpeechMessage("");
     setScreen("listening");
 
@@ -163,6 +192,7 @@ function Index() {
       const cleanedText = heardText.trim();
       if (cleanedText) {
         speechReceivedRef.current = true;
+        transcriptRef.current = cleanedText;
         setTranscript(cleanedText);
       }
     };
@@ -184,7 +214,10 @@ function Index() {
       if (!recognitionActiveRef.current) return;
       recognitionActiveRef.current = false;
       recognitionRef.current = null;
-      if (speechReceivedRef.current) setScreen("waiting");
+      if (speechReceivedRef.current) {
+        void submitRequest(action, transcriptRef.current);
+        setScreen("waiting");
+      }
     };
 
     try {
@@ -199,9 +232,24 @@ function Index() {
   useEffect(() => {
     if (screen !== "waiting") return;
 
-    const confirmationTimer = window.setTimeout(() => setScreen("confirmation"), 3000);
-    return () => window.clearTimeout(confirmationTimer);
-  }, [screen]);
+    if (!requestId) {
+      const confirmationTimer = window.setTimeout(() => setScreen("confirmation"), 3000);
+      return () => window.clearTimeout(confirmationTimer);
+    }
+
+    let cancelled = false;
+    const checkStatus = async () => {
+      const { data } = await supabase.from("requests").select("status").eq("id", requestId).maybeSingle();
+      if (!cancelled && data?.status === "confirmed") setScreen("confirmation");
+    };
+
+    void checkStatus();
+    const statusInterval = window.setInterval(() => void checkStatus(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(statusInterval);
+    };
+  }, [screen, requestId]);
 
   useEffect(() => {
     if (screen !== "confirmation" || !language || !("speechSynthesis" in window)) return;
@@ -317,7 +365,14 @@ function Index() {
             className="mt-3 h-28 w-full resize-none rounded-3xl border-4 border-border bg-card p-4 text-2xl text-card-foreground shadow-soft focus:outline-none"
           />
           {speechMessage ? <p className="mt-4 text-2xl font-bold leading-snug text-foreground" role="alert">{speechMessage}</p> : null}
-          <Button onClick={() => setScreen("waiting")} className="mt-7 min-h-16 w-full rounded-2xl px-8 text-2xl">
+          <Button
+            onClick={() => {
+              stopRecognition();
+              void submitRequest(selectedAction, transcriptRef.current || transcript);
+              setScreen("waiting");
+            }}
+            className="mt-7 min-h-16 w-full rounded-2xl px-8 text-2xl"
+          >
             Confirm Request
           </Button>
         </section>
@@ -432,6 +487,7 @@ function Index() {
 function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { initialProfile: CareProfile | null; isEditing: boolean; onCancel?: () => void; onComplete: (profile: CareProfile) => void }) {
   const [elderName, setElderName] = useState(initialProfile?.elderName ?? "");
   const [contacts, setContacts] = useState<FamilyContact[]>(() => Array.from({ length: 3 }, (_, index) => initialProfile?.contacts[index] ?? { name: "", phone: "" }));
+  const [shop, setShop] = useState<FamilyContact>(() => initialProfile?.shop ?? { name: "", phone: "" });
   const [error, setError] = useState("");
 
   const updateContact = (index: number, field: keyof FamilyContact, value: string) => {
@@ -460,7 +516,8 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
     }
 
     setError("");
-    onComplete({ elderName: trimmedName, contacts: filledContacts });
+    const trimmedShop = { name: shop.name.trim(), phone: shop.phone.trim() };
+    onComplete({ elderName: trimmedName, contacts: filledContacts, ...(trimmedShop.phone ? { shop: trimmedShop } : {}) });
   };
 
   const moveToNextField = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -529,6 +586,34 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
             />
           </div>
         ))}
+
+        <h2 className="font-heading mt-8 w-full text-3xl font-bold text-foreground">Shop owner (for daily needs)</h2>
+        <div className="mt-4 w-full rounded-3xl bg-card/70 p-4 shadow-soft">
+          <label htmlFor="shop-name" className="text-xl font-bold text-foreground">Shop (optional)</label>
+          <Input
+            id="shop-name"
+            data-setup-field
+            value={shop.name}
+            onChange={(event) => setShop((current) => ({ ...current, name: event.target.value }))}
+            onKeyDown={moveToNextField}
+            placeholder="Shop or owner name"
+            className="mt-2 h-14 w-full rounded-2xl border-4 border-border bg-card px-4 text-xl text-card-foreground md:text-xl"
+          />
+          <Input
+            id="shop-phone"
+            data-setup-field
+            type="tel"
+            inputMode="tel"
+            aria-label="Phone number for the shop owner"
+            value={shop.phone}
+            onChange={(event) => setShop((current) => ({ ...current, phone: event.target.value }))}
+            onKeyDown={moveToNextField}
+            placeholder="Phone number"
+            className="mt-3 h-14 w-full rounded-2xl border-4 border-border bg-card px-4 text-xl text-card-foreground md:text-xl"
+          />
+        </div>
+
+
 
         {error ? <p className="mt-5 w-full text-xl font-bold leading-snug text-foreground" role="alert">{error}</p> : null}
 
