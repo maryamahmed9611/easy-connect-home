@@ -132,9 +132,35 @@ function Index() {
     recognitionRef.current = null;
   };
 
+  const submitRequest = async (action: CareAction, details: string) => {
+    if (action === "Talk to Family") {
+      setRequestId(null);
+      return;
+    }
+    const requestType = action === "Medical Support" ? "medical" : "groceries";
+    const phone =
+      action === "Medical Support"
+        ? profile?.contacts[0]?.phone ?? ""
+        : profile?.shop?.phone ?? profile?.contacts[1]?.phone ?? "";
+
+    const { data, error } = await supabase
+      .from("requests")
+      .insert({ name: profile?.elderName ?? "", requestType, details, phone })
+      .select("id")
+      .single();
+
+    if (error || !data) {
+      setRequestId(null);
+      return;
+    }
+    setRequestId(data.id);
+  };
+
   const startListening = (action: CareAction) => {
     setSelectedAction(action);
     setTranscript("");
+    transcriptRef.current = "";
+    setRequestId(null);
     setSpeechMessage("");
     setScreen("listening");
 
