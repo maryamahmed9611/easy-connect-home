@@ -239,8 +239,8 @@ function Index() {
 
     let cancelled = false;
     const checkStatus = async () => {
-      const { data } = await supabase.from("requests").select("status").eq("id", requestId).maybeSingle();
-      if (!cancelled && data?.status === "confirmed") setScreen("confirmation");
+      const { data } = await supabase.rpc("get_request_status", { request_id: requestId });
+      if (!cancelled && data === "confirmed") setScreen("confirmation");
     };
 
     void checkStatus();
