@@ -487,6 +487,7 @@ function Index() {
 function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { initialProfile: CareProfile | null; isEditing: boolean; onCancel?: () => void; onComplete: (profile: CareProfile) => void }) {
   const [elderName, setElderName] = useState(initialProfile?.elderName ?? "");
   const [contacts, setContacts] = useState<FamilyContact[]>(() => Array.from({ length: 3 }, (_, index) => initialProfile?.contacts[index] ?? { name: "", phone: "" }));
+  const [shop, setShop] = useState<FamilyContact>(() => initialProfile?.shop ?? { name: "", phone: "" });
   const [error, setError] = useState("");
 
   const updateContact = (index: number, field: keyof FamilyContact, value: string) => {
