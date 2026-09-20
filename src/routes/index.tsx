@@ -516,7 +516,8 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
     }
 
     setError("");
-    onComplete({ elderName: trimmedName, contacts: filledContacts });
+    const trimmedShop = { name: shop.name.trim(), phone: shop.phone.trim() };
+    onComplete({ elderName: trimmedName, contacts: filledContacts, ...(trimmedShop.phone ? { shop: trimmedShop } : {}) });
   };
 
   const moveToNextField = (event: React.KeyboardEvent<HTMLInputElement>) => {
