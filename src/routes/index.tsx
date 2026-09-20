@@ -587,6 +587,34 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
           </div>
         ))}
 
+        <h2 className="font-heading mt-8 w-full text-3xl font-bold text-foreground">Shop owner (for daily needs)</h2>
+        <div className="mt-4 w-full rounded-3xl bg-card/70 p-4 shadow-soft">
+          <label htmlFor="shop-name" className="text-xl font-bold text-foreground">Shop (optional)</label>
+          <Input
+            id="shop-name"
+            data-setup-field
+            value={shop.name}
+            onChange={(event) => setShop((current) => ({ ...current, name: event.target.value }))}
+            onKeyDown={moveToNextField}
+            placeholder="Shop or owner name"
+            className="mt-2 h-14 w-full rounded-2xl border-4 border-border bg-card px-4 text-xl text-card-foreground md:text-xl"
+          />
+          <Input
+            id="shop-phone"
+            data-setup-field
+            type="tel"
+            inputMode="tel"
+            aria-label="Phone number for the shop owner"
+            value={shop.phone}
+            onChange={(event) => setShop((current) => ({ ...current, phone: event.target.value }))}
+            onKeyDown={moveToNextField}
+            placeholder="Phone number"
+            className="mt-3 h-14 w-full rounded-2xl border-4 border-border bg-card px-4 text-xl text-card-foreground md:text-xl"
+          />
+        </div>
+
+
+
         {error ? <p className="mt-5 w-full text-xl font-bold leading-snug text-foreground" role="alert">{error}</p> : null}
 
         <div className="mb-4 mt-8 grid w-full gap-3">
