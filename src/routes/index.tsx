@@ -192,6 +192,7 @@ function Index() {
       const cleanedText = heardText.trim();
       if (cleanedText) {
         speechReceivedRef.current = true;
+        transcriptRef.current = cleanedText;
         setTranscript(cleanedText);
       }
     };
