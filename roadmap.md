@@ -6,3 +6,5 @@
 - [x] Add editable saved details from the home screen.
 - [x] Apply the selected calm, premium orbit design without reducing accessibility.
 - [x] Verify setup editing, keyboard progression, and phone layouts.
+
+- [x] Twilio voice call + WhatsApp alert on new medical/groceries requests (auto-confirms the row)
