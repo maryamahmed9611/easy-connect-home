@@ -73,7 +73,7 @@ const LANGUAGE_KEY = "care-language";
 const PROFILE_KEY = "care-profile";
 
 type FamilyContact = { name: string; phone: string };
-type CareProfile = { elderName: string; contacts: FamilyContact[]; shop?: FamilyContact };
+type CareProfile = { elderName: string; contacts: FamilyContact[]; shop?: FamilyContact; ambulance?: FamilyContact };
 
 function Index() {
   const [hydrated, setHydrated] = useState(false);
@@ -100,7 +100,7 @@ function Index() {
       try {
         const parsed = JSON.parse(savedProfile) as CareProfile;
         if (parsed && typeof parsed.elderName === "string") {
-          setProfile({ elderName: parsed.elderName, contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [], ...(parsed.shop ? { shop: parsed.shop } : {}) });
+          setProfile({ elderName: parsed.elderName, contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [], ...(parsed.shop ? { shop: parsed.shop } : {}), ...(parsed.ambulance ? { ambulance: parsed.ambulance } : {}) });
         }
       } catch {
         // A damaged saved profile is ignored so setup can be completed again.
@@ -118,7 +118,23 @@ function Index() {
   const saveProfile = (newProfile: CareProfile) => {
     window.localStorage.setItem(PROFILE_KEY, JSON.stringify(newProfile));
     setProfile(newProfile);
+    const rows = [
+      ...newProfile.contacts.map((c) => ({ name: c.name, relationship: "family", phone: c.phone, type: "family" })),
+      ...(newProfile.shop?.phone ? [{ name: newProfile.shop.name, relationship: "shop owner", phone: newProfile.shop.phone, type: "shop" }] : []),
+      ...(newProfile.ambulance?.phone ? [{ name: newProfile.ambulance.name || "Ambulance", relationship: "emergency", phone: newProfile.ambulance.phone, type: "ambulance" }] : []),
+    ];
+    if (rows.length) void supabase.from("contacts").insert(rows).then(({ error }) => { if (error) console.error("Could not save contacts", error.message); });
   };
+
+  const getLocation = () =>
+    new Promise<{ latitude: number; longitude: number } | null>((resolve) => {
+      if (!navigator.geolocation) return resolve(null);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+      );
+    });
 
   const chooseLanguage = (code: LanguageCode) => {
     window.localStorage.setItem(LANGUAGE_KEY, code);
@@ -143,9 +159,18 @@ function Index() {
         ? profile?.contacts[0]?.phone ?? ""
         : profile?.shop?.phone ?? profile?.contacts[1]?.phone ?? "";
 
+    const location = requestType === "medical" ? await getLocation() : null;
     const { data, error } = await supabase
       .from("requests")
-      .insert({ name: profile?.elderName ?? "", requestType, details, phone })
+      .insert({
+        name: profile?.elderName ?? "",
+        requestType,
+        details,
+        phone,
+        latitude: location?.latitude ?? null,
+        longitude: location?.longitude ?? null,
+        fallback_phone: requestType === "medical" ? profile?.ambulance?.phone || null : null,
+      })
       .select("id")
       .single();
 
@@ -488,6 +513,7 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
   const [elderName, setElderName] = useState(initialProfile?.elderName ?? "");
   const [contacts, setContacts] = useState<FamilyContact[]>(() => Array.from({ length: 3 }, (_, index) => initialProfile?.contacts[index] ?? { name: "", phone: "" }));
   const [shop, setShop] = useState<FamilyContact>(() => initialProfile?.shop ?? { name: "", phone: "" });
+  const [ambulance, setAmbulance] = useState<FamilyContact>(() => initialProfile?.ambulance ?? { name: "", phone: "" });
   const [error, setError] = useState("");
 
   const updateContact = (index: number, field: keyof FamilyContact, value: string) => {
@@ -517,7 +543,7 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
 
     setError("");
     const trimmedShop = { name: shop.name.trim(), phone: shop.phone.trim() };
-    onComplete({ elderName: trimmedName, contacts: filledContacts, ...(trimmedShop.phone ? { shop: trimmedShop } : {}) });
+    onComplete({ elderName: trimmedName, contacts: filledContacts, ...(trimmedShop.phone ? { shop: trimmedShop } : {}), ...(ambulance.phone.trim() ? { ambulance: { name: ambulance.name.trim(), phone: ambulance.phone.trim() } } : {}) });
   };
 
   const moveToNextField = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -613,7 +639,21 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
           />
         </div>
 
-
+        <h2 className="font-heading mt-8 w-full text-3xl font-bold text-foreground">Ambulance (if family does not answer)</h2>
+        <div className="mt-4 w-full rounded-3xl bg-card/70 p-4 shadow-soft">
+          <label htmlFor="ambulance-phone" className="text-xl font-bold text-foreground">Ambulance number (optional)</label>
+          <Input
+            id="ambulance-phone"
+            data-setup-field
+            type="tel"
+            inputMode="tel"
+            value={ambulance.phone}
+            onChange={(event) => setAmbulance({ name: "Ambulance", phone: event.target.value })}
+            onKeyDown={moveToNextField}
+            placeholder="Ambulance phone number"
+            className="mt-2 h-14 w-full rounded-2xl border-4 border-border bg-card px-4 text-xl text-card-foreground md:text-xl"
+          />
+        </div>
 
         {error ? <p className="mt-5 w-full text-xl font-bold leading-snug text-foreground" role="alert">{error}</p> : null}
 

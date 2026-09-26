@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      contacts: {
+        Row: {
+          created_at: string
+          id: string
+          name: string | null
+          phone: string
+          relationship: string | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          phone: string
+          relationship?: string | null
+          type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string | null
+          phone?: string
+          relationship?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
       notify_config: {
         Row: {
           key: string
@@ -32,7 +59,10 @@ export type Database = {
       requests: {
         Row: {
           details: string | null
+          fallback_phone: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
           name: string | null
           phone: string | null
           requestType: string | null
@@ -41,7 +71,10 @@ export type Database = {
         }
         Insert: {
           details?: string | null
+          fallback_phone?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name?: string | null
           phone?: string | null
           requestType?: string | null
@@ -50,7 +83,10 @@ export type Database = {
         }
         Update: {
           details?: string | null
+          fallback_phone?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name?: string | null
           phone?: string | null
           requestType?: string | null
@@ -64,6 +100,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      format_phone_in: { Args: { raw: string }; Returns: string }
       get_request_status: { Args: { request_id: string }; Returns: string }
     }
     Enums: {
