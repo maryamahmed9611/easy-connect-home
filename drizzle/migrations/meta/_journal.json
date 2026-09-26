@@ -22,6 +22,13 @@
       "when": 1790087187404,
       "tag": "0002_notify_requests_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790423869332,
+      "tag": "0003_contacts_and_location",
+      "breakpoints": true
     }
   ]
 }
