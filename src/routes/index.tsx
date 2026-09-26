@@ -650,7 +650,7 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
             value={ambulance.phone}
             onChange={(event) => setAmbulance({ name: "Ambulance", phone: event.target.value })}
             onKeyDown={moveToNextField}
-            placeholder="e.g. 108"
+            placeholder="Ambulance phone number"
             className="mt-2 h-14 w-full rounded-2xl border-4 border-border bg-card px-4 text-xl text-card-foreground md:text-xl"
           />
         </div>
