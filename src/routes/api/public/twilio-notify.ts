@@ -63,6 +63,14 @@ export const Route = createFileRoute("/api/public/twilio-notify")({
         const origin = `https://${url.host}`;
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+        // Test mode: when TWILIO_TEST_NUMBER is set, every call and WhatsApp goes there instead.
+        const testNumberRaw = process.env["TWILIO_TEST_NUMBER"]?.trim();
+        const testNumber = testNumberRaw ? toE164(testNumberRaw) : null;
+        const route = (to: string) => testNumber ?? to;
+        const tag = (text: string, realTo: string) =>
+          testNumber ? `[TEST MODE – would go to ${realTo}]\n\n${text}` : text;
+        if (testNumber) console.log(`[twilio-notify] Test mode active; routing to ${testNumber}`);
+
         const loadRow = async (id: string) =>
           supabaseAdmin
             .from("requests")
@@ -75,9 +83,9 @@ export const Route = createFileRoute("/api/public/twilio-notify")({
 
         const placeCall = (id: string, to: string, twiml: string, target: "primary" | "fallback") =>
           twilioPost(accountSid, authToken, "Calls.json", {
-            To: to,
+            To: route(to),
             From: fromNumber,
-            Twiml: twiml,
+            Twiml: testNumber ? twiml.replace("<Response>", `<Response>${say("This is a test call.")}`) : twiml,
             Timeout: "25",
             StatusCallback: callbackUrl(id, target),
             StatusCallbackEvent: "completed",
@@ -160,9 +168,9 @@ export const Route = createFileRoute("/api/public/twilio-notify")({
 
         const call = await placeCall(row.id, to, twiml, "primary");
         const whatsapp = await twilioPost(accountSid, authToken, "Messages.json", {
-          To: `whatsapp:${to}`,
+          To: `whatsapp:${route(to)}`,
           From: `whatsapp:${fromNumber}`,
-          Body: whatsappBody,
+          Body: tag(whatsappBody, to),
         });
 
         if (!call.ok) {
