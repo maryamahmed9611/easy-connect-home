@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiTtsRouteImport } from './routes/api/tts'
 import { Route as ApiPublicTwilioNotifyRouteImport } from './routes/api/public/twilio-notify'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTtsRoute = ApiTtsRouteImport.update({
+  id: '/api/tts',
+  path: '/api/tts',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicTwilioNotifyRoute = ApiPublicTwilioNotifyRouteImport.update({
@@ -25,27 +31,31 @@ const ApiPublicTwilioNotifyRoute = ApiPublicTwilioNotifyRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/tts': typeof ApiTtsRoute
   '/api/public/twilio-notify': typeof ApiPublicTwilioNotifyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/tts': typeof ApiTtsRoute
   '/api/public/twilio-notify': typeof ApiPublicTwilioNotifyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/tts': typeof ApiTtsRoute
   '/api/public/twilio-notify': typeof ApiPublicTwilioNotifyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/public/twilio-notify'
+  fullPaths: '/' | '/api/tts' | '/api/public/twilio-notify'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/twilio-notify'
-  id: '__root__' | '/' | '/api/public/twilio-notify'
+  to: '/' | '/api/tts' | '/api/public/twilio-notify'
+  id: '__root__' | '/' | '/api/tts' | '/api/public/twilio-notify'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiTtsRoute: typeof ApiTtsRoute
   ApiPublicTwilioNotifyRoute: typeof ApiPublicTwilioNotifyRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/tts': {
+      id: '/api/tts'
+      path: '/api/tts'
+      fullPath: '/api/tts'
+      preLoaderRoute: typeof ApiTtsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/twilio-notify': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiTtsRoute: ApiTtsRoute,
   ApiPublicTwilioNotifyRoute: ApiPublicTwilioNotifyRoute,
 }
 export const routeTree = rootRouteImport
