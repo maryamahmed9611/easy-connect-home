@@ -29,6 +29,13 @@
       "when": 1790423869332,
       "tag": "0003_contacts_and_location",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790469803989,
+      "tag": "0004_disable_twilio_trigger",
+      "breakpoints": true
     }
   ]
 }
