@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { sendWhatsAppAlert } from "@/lib/alerts.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -67,6 +68,12 @@ const CONFIRMATION_SPEECH: Record<LanguageCode, string> = {
   "en-IN": "Your request has been confirmed",
   "hi-IN": "आपका अनुरोध स्वीकार कर लिया गया है",
   "kn-IN": "ನಿಮ್ಮ ವಿನಂತಿಯನ್ನು ದೃಢೀಕರಿಸಲಾಗಿದೆ",
+};
+
+const ALERT_STATUS: Record<LanguageCode, string> = {
+  "en-IN": "Help alert sent. Calling now.",
+  "hi-IN": "मदद का संदेश भेज दिया गया है। अभी कॉल कर रहे हैं।",
+  "kn-IN": "ಸಹಾಯದ ಸಂದೇಶ ಕಳುಹಿಸಲಾಗಿದೆ. ಈಗ ಕರೆ ಮಾಡಲಾಗುತ್ತಿದೆ.",
 };
 
 const LANGUAGE_KEY = "care-language";
@@ -178,7 +185,13 @@ function Index() {
       setRequestId(null);
       return;
     }
+    try {
+      await sendWhatsAppAlert({ data: { requestId: data.id } });
+    } catch (alertError) {
+      console.error("WhatsApp alert failed", alertError);
+    }
     setRequestId(data.id);
+    if (phone) window.location.href = `tel:${phone.replace(/[^\d+]/g, "")}`;
   };
 
   const startListening = (action: CareAction) => {
@@ -276,12 +289,14 @@ function Index() {
     };
   }, [screen, requestId]);
 
+  const isAlert = selectedAction === "Medical Support" || selectedAction === "Daily Needs";
+
   useEffect(() => {
     if (screen !== "confirmation" || !language || !("speechSynthesis" in window)) return;
 
     const speakConfirmation = () => {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(CONFIRMATION_SPEECH[language]);
+      const utterance = new SpeechSynthesisUtterance(isAlert ? ALERT_STATUS[language] : CONFIRMATION_SPEECH[language]);
       utterance.lang = language;
       utterance.rate = 0.9;
       const voices = window.speechSynthesis.getVoices();
@@ -300,13 +315,36 @@ function Index() {
       window.speechSynthesis.speak(utterance);
     };
 
-    speakConfirmation();
-    window.speechSynthesis.addEventListener("voiceschanged", speakConfirmation, { once: true });
+    let cancelled = false;
+    let audio: HTMLAudioElement | null = null;
+    let objectUrl: string | null = null;
+    const fallback = () => {
+      if (cancelled) return;
+      speakConfirmation();
+      window.speechSynthesis.addEventListener("voiceschanged", speakConfirmation, { once: true });
+    };
+    fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lang: language, kind: isAlert ? "alert" : "done" }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`tts ${res.status}`);
+        const blob = await res.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        audio = new Audio(objectUrl);
+        await audio.play();
+      })
+      .catch(fallback);
     return () => {
+      cancelled = true;
+      audio?.pause();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
       window.speechSynthesis.removeEventListener("voiceschanged", speakConfirmation);
       window.speechSynthesis.cancel();
     };
-  }, [language, screen]);
+  }, [language, screen, isAlert]);
 
   useEffect(() => {
     if (screen !== "confirmation") return;
@@ -434,6 +472,15 @@ function Index() {
           </div>
           <p className="mt-8 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
            <h1 className="font-heading mt-3 text-4xl font-bold leading-tight text-foreground">Request confirmed</h1>
+          {isAlert && language && <p className="mt-4 text-2xl font-semibold text-foreground">{ALERT_STATUS[language]}</p>}
+          {selectedAction === "Medical Support" && profile?.ambulance?.phone && (
+            <a
+              href={`tel:${profile.ambulance.phone.replace(/[^\d+]/g, "")}`}
+              className="mt-8 flex min-h-[100px] w-full items-center justify-center rounded-[2rem] bg-destructive px-6 text-3xl font-bold text-destructive-foreground shadow-warm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring"
+            >
+              Call Ambulance
+            </a>
+          )}
         </section>
       </main>
     );
