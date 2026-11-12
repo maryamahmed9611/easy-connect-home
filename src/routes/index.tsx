@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { HeartPulse, Mic, ShoppingBasket, UsersRound, Check, ArrowLeft, Languages, HeartHandshake, PencilLine } from "lucide-react";
+import { HeartPulse, Mic, ShoppingBasket, UsersRound, Check, ArrowLeft, Languages, HeartHandshake, PencilLine, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { sendWhatsAppAlert } from "@/lib/alerts.functions";
+import { RESULT_HEADING, resultMessage, type LanguageCode, type ResultStatus } from "@/lib/care-messages";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -23,7 +24,6 @@ export const Route = createFileRoute("/")({
 
 type CareAction = "Medical Support" | "Daily Needs" | "Talk to Family";
 type Screen = "home" | "listening" | "waiting" | "confirmation";
-type LanguageCode = "en-IN" | "hi-IN" | "kn-IN";
 
 type SpeechRecognitionResultLike = {
   isFinal: boolean;
@@ -64,17 +64,29 @@ const LANGUAGES: Array<{ code: LanguageCode; label: string }> = [
   { code: "kn-IN", label: "ಕನ್ನಡ" },
 ];
 
-const CONFIRMATION_SPEECH: Record<LanguageCode, string> = {
-  "en-IN": "Your request has been confirmed",
-  "hi-IN": "आपका अनुरोध स्वीकार कर लिया गया है",
-  "kn-IN": "ನಿಮ್ಮ ವಿನಂತಿಯನ್ನು ದೃಢೀಕರಿಸಲಾಗಿದೆ",
-};
+// Longest we wait for the WhatsApp step before showing an honest "could not confirm" result.
+const ALERT_TIMEOUT_MS = 20000;
 
-const ALERT_STATUS: Record<LanguageCode, string> = {
-  "en-IN": "Help alert sent. Calling now.",
-  "hi-IN": "मदद का संदेश भेज दिया गया है। अभी कॉल कर रहे हैं।",
-  "kn-IN": "ಸಹಾಯದ ಸಂದೇಶ ಕಳುಹಿಸಲಾಗಿದೆ. ಈಗ ಕರೆ ಮಾಡಲಾಗುತ್ತಿದೆ.",
-};
+// What actually happened to the last request. The result screen is driven only by this.
+type RequestOutcome = { status: ResultStatus; calling: boolean };
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error("timed out")), ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
 
 const LANGUAGE_KEY = "care-language";
 const PROFILE_KEY = "care-profile";
@@ -91,7 +103,8 @@ function Index() {
   const [transcript, setTranscript] = useState("");
   const [speechMessage, setSpeechMessage] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
-  const [requestId, setRequestId] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<RequestOutcome | null>(null);
+  const submissionRef = useRef(0);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const recognitionActiveRef = useRef(false);
   const speechReceivedRef = useRef(false);
@@ -155,50 +168,74 @@ function Index() {
     recognitionRef.current = null;
   };
 
+  // Saves the request, waits for the real WhatsApp result, and only then shows the result screen.
   const submitRequest = async (action: CareAction, details: string) => {
+    const submission = ++submissionRef.current;
+    setOutcome(null);
+    setScreen("waiting");
+
+    const finish = (status: ResultStatus, phone: string) => {
+      if (submissionRef.current !== submission) return;
+      setOutcome({ status, calling: Boolean(phone) });
+      setScreen("confirmation");
+      if (phone) window.location.href = telHref(phone);
+    };
+
     if (action === "Talk to Family") {
-      setRequestId(null);
+      const familyPhone = profile?.contacts[0]?.phone ?? "";
+      finish(familyPhone ? "family" : "no_family", familyPhone);
       return;
     }
+
     const requestType = action === "Medical Support" ? "medical" : "groceries";
     const phone =
       action === "Medical Support"
         ? profile?.contacts[0]?.phone ?? ""
         : profile?.shop?.phone ?? profile?.contacts[1]?.phone ?? "";
 
-    const location = requestType === "medical" ? await getLocation() : null;
-    const { data, error } = await supabase
-      .from("requests")
-      .insert({
-        name: profile?.elderName ?? "",
-        requestType,
-        details,
-        phone,
-        latitude: location?.latitude ?? null,
-        longitude: location?.longitude ?? null,
-        fallback_phone: requestType === "medical" ? profile?.ambulance?.phone || null : null,
-      })
-      .select("id")
-      .single();
+    let savedId: string | null = null;
+    try {
+      const location = requestType === "medical" ? await getLocation() : null;
+      const { data, error } = await supabase
+        .from("requests")
+        .insert({
+          name: profile?.elderName ?? "",
+          requestType,
+          details,
+          phone,
+          latitude: location?.latitude ?? null,
+          longitude: location?.longitude ?? null,
+          fallback_phone: requestType === "medical" ? profile?.ambulance?.phone || null : null,
+        })
+        .select("id")
+        .single();
+      if (error) console.error("Could not save request", error.message);
+      savedId = data?.id ?? null;
+    } catch (saveError) {
+      console.error("Could not save request", saveError);
+    }
 
-    if (error || !data) {
-      setRequestId(null);
+    if (!savedId) {
+      finish("failed", phone);
       return;
     }
+
+    let alertSent = false;
     try {
-      await sendWhatsAppAlert({ data: { requestId: data.id } });
+      const result = await withTimeout(sendWhatsAppAlert({ data: { requestId: savedId } }), ALERT_TIMEOUT_MS);
+      alertSent = result.sent;
+      if (!result.sent) console.error(`WhatsApp alert not sent: ${result.reason}`);
     } catch (alertError) {
       console.error("WhatsApp alert failed", alertError);
     }
-    setRequestId(data.id);
-    if (phone) window.location.href = `tel:${phone.replace(/[^\d+]/g, "")}`;
+    finish(alertSent ? "sent" : "saved", phone);
   };
 
   const startListening = (action: CareAction) => {
     setSelectedAction(action);
     setTranscript("");
     transcriptRef.current = "";
-    setRequestId(null);
+    setOutcome(null);
     setSpeechMessage("");
     setScreen("listening");
 
@@ -252,10 +289,7 @@ function Index() {
       if (!recognitionActiveRef.current) return;
       recognitionActiveRef.current = false;
       recognitionRef.current = null;
-      if (speechReceivedRef.current) {
-        void submitRequest(action, transcriptRef.current);
-        setScreen("waiting");
-      }
+      if (speechReceivedRef.current) void submitRequest(action, transcriptRef.current);
     };
 
     try {
@@ -268,35 +302,12 @@ function Index() {
   };
 
   useEffect(() => {
-    if (screen !== "waiting") return;
-
-    if (!requestId) {
-      const confirmationTimer = window.setTimeout(() => setScreen("confirmation"), 3000);
-      return () => window.clearTimeout(confirmationTimer);
-    }
-
-    let cancelled = false;
-    const checkStatus = async () => {
-      const { data } = await supabase.rpc("get_request_status", { request_id: requestId });
-      if (!cancelled && data === "confirmed") setScreen("confirmation");
-    };
-
-    void checkStatus();
-    const statusInterval = window.setInterval(() => void checkStatus(), 3000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(statusInterval);
-    };
-  }, [screen, requestId]);
-
-  const isAlert = selectedAction === "Medical Support" || selectedAction === "Daily Needs";
-
-  useEffect(() => {
-    if (screen !== "confirmation" || !language || !("speechSynthesis" in window)) return;
+    if (screen !== "confirmation" || !language || !outcome || !("speechSynthesis" in window)) return;
+    const spokenText = resultMessage(outcome.status, outcome.calling, language);
 
     const speakConfirmation = () => {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(isAlert ? ALERT_STATUS[language] : CONFIRMATION_SPEECH[language]);
+      const utterance = new SpeechSynthesisUtterance(spokenText);
       utterance.lang = language;
       utterance.rate = 0.9;
       const voices = window.speechSynthesis.getVoices();
@@ -326,7 +337,7 @@ function Index() {
     fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lang: language, kind: isAlert ? "alert" : "done" }),
+      body: JSON.stringify({ lang: language, status: outcome.status, calling: outcome.calling }),
     })
       .then(async (res) => {
         if (!res.ok) throw new Error(`tts ${res.status}`);
@@ -344,14 +355,17 @@ function Index() {
       window.speechSynthesis.removeEventListener("voiceschanged", speakConfirmation);
       window.speechSynthesis.cancel();
     };
-  }, [language, screen, isAlert]);
+  }, [language, screen, outcome]);
+
+  // Only a fully successful result returns home on its own; problems stay on screen until dismissed.
+  const resultIsSuccess = outcome?.status === "sent" || outcome?.status === "family";
 
   useEffect(() => {
-    if (screen !== "confirmation") return;
+    if (screen !== "confirmation" || !resultIsSuccess) return;
 
     const homeTimer = window.setTimeout(() => setScreen("home"), 4500);
     return () => window.clearTimeout(homeTimer);
-  }, [screen]);
+  }, [screen, resultIsSuccess]);
 
   if (!hydrated) {
     return <main className="app-background min-h-svh" aria-hidden="true" />;
@@ -432,7 +446,6 @@ function Index() {
             onClick={() => {
               stopRecognition();
               void submitRequest(selectedAction, transcriptRef.current || transcript);
-              setScreen("waiting");
             }}
             className="mt-7 min-h-16 w-full rounded-2xl px-8 text-2xl"
           >
@@ -455,31 +468,51 @@ function Index() {
           </div>
           <p className="mt-6 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
            <h1 className="font-heading mt-3 max-w-sm text-4xl font-bold leading-tight text-foreground">
-            Support is on the way, please wait
+            Sending your request, please wait
           </h1>
         </section>
       </main>
     );
   }
 
-  if (screen === "confirmation") {
+  if (screen === "confirmation" && outcome) {
+    const familyContact = profile.contacts[0];
     return (
       <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
         <OrganicShapes />
         <section className="relative z-10 flex w-full max-w-md flex-col items-center text-center" aria-live="polite">
-          <div className="grid size-40 place-items-center rounded-full bg-success text-success-foreground shadow-warm" aria-hidden="true">
-            <Check className="size-24" strokeWidth={3} />
-          </div>
+          {resultIsSuccess ? (
+            <div className="grid size-40 place-items-center rounded-full bg-success text-success-foreground shadow-warm" aria-hidden="true">
+              <Check className="size-24" strokeWidth={3} />
+            </div>
+          ) : (
+            <div className="grid size-40 place-items-center rounded-full bg-destructive text-destructive-foreground shadow-warm" aria-hidden="true">
+              <TriangleAlert className="size-24" strokeWidth={2.5} />
+            </div>
+          )}
           <p className="mt-8 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
-           <h1 className="font-heading mt-3 text-4xl font-bold leading-tight text-foreground">Request confirmed</h1>
-          {isAlert && language && <p className="mt-4 text-2xl font-semibold text-foreground">{ALERT_STATUS[language]}</p>}
-          {selectedAction === "Medical Support" && profile?.ambulance?.phone && (
+          <h1 className="font-heading mt-3 text-4xl font-bold leading-tight text-foreground">{RESULT_HEADING[outcome.status]}</h1>
+          {language && <p className="mt-4 text-2xl font-semibold text-foreground">{resultMessage(outcome.status, outcome.calling, language)}</p>}
+          {!resultIsSuccess && familyContact?.phone && (
             <a
-              href={`tel:${profile.ambulance.phone.replace(/[^\d+]/g, "")}`}
+              href={telHref(familyContact.phone)}
+              className="mt-8 flex min-h-[100px] w-full items-center justify-center rounded-[2rem] bg-primary px-6 text-3xl font-bold text-primary-foreground shadow-warm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring"
+            >
+              Call {familyContact.name}
+            </a>
+          )}
+          {selectedAction === "Medical Support" && profile.ambulance?.phone && (
+            <a
+              href={telHref(profile.ambulance.phone)}
               className="mt-8 flex min-h-[100px] w-full items-center justify-center rounded-[2rem] bg-destructive px-6 text-3xl font-bold text-destructive-foreground shadow-warm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring"
             >
               Call Ambulance
             </a>
+          )}
+          {!resultIsSuccess && (
+            <Button variant="quiet" onClick={() => setScreen("home")} className="mt-6 min-h-16 w-full text-2xl">
+              Back to home
+            </Button>
           )}
         </section>
       </main>

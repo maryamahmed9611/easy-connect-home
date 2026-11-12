@@ -1,13 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
-const PHRASES = {
-  "en-IN": { alert: "Help alert sent. Calling now.", done: "Your request has been confirmed." },
-  "hi-IN": { alert: "मदद का संदेश भेज दिया गया है। अभी कॉल कर रहे हैं।", done: "आपका अनुरोध स्वीकार कर लिया गया है।" },
-  "kn-IN": { alert: "ಸಹಾಯದ ಸಂದೇಶ ಕಳುಹಿಸಲಾಗಿದೆ. ಈಗ ಕರೆ ಮಾಡಲಾಗುತ್ತಿದೆ.", done: "ನಿಮ್ಮ ವಿನಂತಿಯನ್ನು ದೃಢೀಕರಿಸಲಾಗಿದೆ." },
-} as const;
+import { RESULT_STATUSES, resultMessage } from "@/lib/care-messages";
 
-const schema = z.object({ lang: z.enum(["en-IN", "hi-IN", "kn-IN"]), kind: z.enum(["alert", "done"]) });
+// Only fixed, pre-written phrases can be spoken, so this route cannot be used to voice arbitrary text.
+const schema = z.object({
+  lang: z.enum(["en-IN", "hi-IN", "kn-IN"]),
+  status: z.enum(RESULT_STATUSES),
+  calling: z.boolean(),
+});
 
 export const Route = createFileRoute("/api/tts")({
   server: {
@@ -17,12 +18,12 @@ export const Route = createFileRoute("/api/tts")({
         if (!parsed.success) return new Response("Invalid request", { status: 400 });
         const key = process.env["SMALLEST_AI_API_KEY"];
         if (!key) return new Response("Voice service not configured", { status: 500 });
-        const { lang, kind } = parsed.data;
+        const { lang, status, calling } = parsed.data;
         const upstream = await fetch("https://waves-api.smallest.ai/api/v1/lightning-v3.1/get_speech", {
           method: "POST",
           headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            text: PHRASES[lang][kind],
+            text: resultMessage(status, calling, lang),
             voice_id: "srishti",
             language: lang.slice(0, 2),
             sample_rate: 24000,
