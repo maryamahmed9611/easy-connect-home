@@ -92,7 +92,7 @@ const LANGUAGE_KEY = "care-language";
 const PROFILE_KEY = "care-profile";
 
 type FamilyContact = { name: string; phone: string };
-type CareProfile = { elderName: string; contacts: FamilyContact[]; shop?: FamilyContact; ambulance?: FamilyContact };
+type CareProfile = { elderName: string; elderPhone?: string; contacts: FamilyContact[]; shop?: FamilyContact; ambulance?: FamilyContact };
 
 function Index() {
   const [hydrated, setHydrated] = useState(false);
@@ -120,7 +120,7 @@ function Index() {
       try {
         const parsed = JSON.parse(savedProfile) as CareProfile;
         if (parsed && typeof parsed.elderName === "string") {
-          setProfile({ elderName: parsed.elderName, contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [], ...(parsed.shop ? { shop: parsed.shop } : {}), ...(parsed.ambulance ? { ambulance: parsed.ambulance } : {}) });
+          setProfile({ elderName: parsed.elderName, ...(typeof parsed.elderPhone === "string" && parsed.elderPhone ? { elderPhone: parsed.elderPhone } : {}), contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [], ...(parsed.shop ? { shop: parsed.shop } : {}), ...(parsed.ambulance ? { ambulance: parsed.ambulance } : {}) });
         }
       } catch {
         // A damaged saved profile is ignored so setup can be completed again.
@@ -181,21 +181,17 @@ function Index() {
       if (phone) window.location.href = telHref(phone);
     };
 
-    if (action === "Talk to Family") {
-      const familyPhone = profile?.contacts[0]?.phone ?? "";
-      finish(familyPhone ? "family" : "no_family", familyPhone);
-      return;
-    }
-
-    const requestType = action === "Medical Support" ? "medical" : "groceries";
-    const phone =
-      action === "Medical Support"
-        ? profile?.contacts[0]?.phone ?? ""
-        : profile?.shop?.phone ?? profile?.contacts[1]?.phone ?? "";
+    // Medical and Talk to Family (call assistance) alert every family contact and dial the first one.
+    // Daily Needs alerts and dials the shop (or the second family contact if no shop is saved).
+    const requestType = action === "Medical Support" ? "medical" : action === "Daily Needs" ? "groceries" : "callback";
+    const familyPhones = (profile?.contacts ?? []).map((c) => c.phone).filter(Boolean);
+    const shopPhone = profile?.shop?.phone || profile?.contacts[1]?.phone || "";
+    const recipients = requestType === "groceries" ? (shopPhone ? [shopPhone] : []) : familyPhones;
+    const phone = requestType === "groceries" ? shopPhone : familyPhones[0] ?? "";
 
     let savedId: string | null = null;
     try {
-      const location = requestType === "medical" ? await getLocation() : null;
+      const location = requestType === "callback" ? null : await getLocation();
       // The ID is created here because the app may only INSERT requests, not read them back
       // (asking for the new row with .select() is rejected by the database's security rules).
       const newId = crypto.randomUUID();
@@ -222,7 +218,10 @@ function Index() {
 
     let alertSent = false;
     try {
-      const result = await withTimeout(sendWhatsAppAlert({ data: { requestId: savedId } }), ALERT_TIMEOUT_MS);
+      const result = await withTimeout(
+        sendWhatsAppAlert({ data: { requestId: savedId, recipients, elderPhone: profile?.elderPhone ?? "" } }),
+        ALERT_TIMEOUT_MS,
+      );
       alertSent = result.sent;
       if (!result.sent) console.error(`WhatsApp alert not sent: ${result.reason}`);
     } catch (alertError) {
@@ -591,6 +590,7 @@ function Index() {
 
 function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { initialProfile: CareProfile | null; isEditing: boolean; onCancel?: () => void; onComplete: (profile: CareProfile) => void }) {
   const [elderName, setElderName] = useState(initialProfile?.elderName ?? "");
+  const [elderPhone, setElderPhone] = useState(initialProfile?.elderPhone ?? "");
   const [contacts, setContacts] = useState<FamilyContact[]>(() => Array.from({ length: 3 }, (_, index) => initialProfile?.contacts[index] ?? { name: "", phone: "" }));
   const [shop, setShop] = useState<FamilyContact>(() => initialProfile?.shop ?? { name: "", phone: "" });
   const [ambulance, setAmbulance] = useState<FamilyContact>(() => initialProfile?.ambulance ?? { name: "", phone: "" });
@@ -623,7 +623,7 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
 
     setError("");
     const trimmedShop = { name: shop.name.trim(), phone: shop.phone.trim() };
-    onComplete({ elderName: trimmedName, contacts: filledContacts, ...(trimmedShop.phone ? { shop: trimmedShop } : {}), ...(ambulance.phone.trim() ? { ambulance: { name: ambulance.name.trim(), phone: ambulance.phone.trim() } } : {}) });
+    onComplete({ elderName: trimmedName, ...(elderPhone.trim() ? { elderPhone: elderPhone.trim() } : {}), contacts: filledContacts, ...(trimmedShop.phone ? { shop: trimmedShop } : {}), ...(ambulance.phone.trim() ? { ambulance: { name: ambulance.name.trim(), phone: ambulance.phone.trim() } } : {}) });
   };
 
   const moveToNextField = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -659,6 +659,21 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
           onChange={(event) => setElderName(event.target.value)}
           onKeyDown={moveToNextField}
           placeholder="Name"
+          className="mt-3 h-16 w-full rounded-2xl border-4 border-border bg-card px-4 text-2xl text-card-foreground shadow-soft md:text-2xl"
+        />
+
+        <label htmlFor="elder-phone" className="mt-6 w-full text-2xl font-bold text-foreground">
+          Their phone number (optional)
+        </label>
+        <Input
+          id="elder-phone"
+          data-setup-field
+          type="tel"
+          inputMode="tel"
+          value={elderPhone}
+          onChange={(event) => setElderPhone(event.target.value)}
+          onKeyDown={moveToNextField}
+          placeholder="So family can call back"
           className="mt-3 h-16 w-full rounded-2xl border-4 border-border bg-card px-4 text-2xl text-card-foreground shadow-soft md:text-2xl"
         />
 
