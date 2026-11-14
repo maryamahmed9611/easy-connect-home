@@ -188,9 +188,11 @@ function Index() {
 
     const finish = (status: ResultStatus, phone: string) => {
       if (submissionRef.current !== submission) return;
-      setOutcome({ status, calling: Boolean(phone), callName, callPhone: phone, showAllFamily: requestType === "callback" });
+      // Only Talk to Family opens the phone dialer automatically; other requests just show Call buttons.
+      const autoDial = requestType === "callback" && Boolean(phone);
+      setOutcome({ status, calling: autoDial, callName, callPhone: phone, showAllFamily: requestType === "callback" });
       setScreen("confirmation");
-      if (phone) window.location.href = telHref(phone);
+      if (autoDial) window.location.href = telHref(phone);
     };
 
     // Medical and Talk to Family (call assistance) alert every family contact and dial the first one.
@@ -339,8 +341,9 @@ function Index() {
       const exactVoice = voices.find((voice) => voice.lang.toLowerCase() === language.toLowerCase());
       const languagePrefix = language.slice(0, 2).toLowerCase();
       const relatedVoice = voices.find((voice) => voice.lang.toLowerCase().startsWith(languagePrefix));
-      const fallbackVoice = voices.find((voice) => voice.default) ?? voices[0];
-      const selectedVoice = exactVoice ?? relatedVoice ?? fallbackVoice;
+      // Never force another language's voice (e.g. English) onto Hindi/Kannada text: if no matching
+      // voice is listed, leave it unset so the phone picks one for utterance.lang itself.
+      const selectedVoice = exactVoice ?? relatedVoice;
       if (selectedVoice) {
         try {
           utterance.voice = selectedVoice;
