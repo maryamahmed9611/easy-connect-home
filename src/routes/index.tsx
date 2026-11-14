@@ -68,7 +68,8 @@ const LANGUAGES: Array<{ code: LanguageCode; label: string }> = [
 const ALERT_TIMEOUT_MS = 20000;
 
 // What actually happened to the last request. The result screen is driven only by this.
-type RequestOutcome = { status: ResultStatus; calling: boolean };
+// callName/callPhone: who the app dials, also shown as a big "Call …" button on the result screen.
+type RequestOutcome = { status: ResultStatus; calling: boolean; callName: string; callPhone: string };
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -92,7 +93,7 @@ const LANGUAGE_KEY = "care-language";
 const PROFILE_KEY = "care-profile";
 
 type FamilyContact = { name: string; phone: string };
-type CareProfile = { elderName: string; contacts: FamilyContact[]; shop?: FamilyContact; ambulance?: FamilyContact };
+type CareProfile = { elderName: string; elderPhone?: string; contacts: FamilyContact[]; shop?: FamilyContact; ambulance?: FamilyContact };
 
 function Index() {
   const [hydrated, setHydrated] = useState(false);
@@ -120,7 +121,7 @@ function Index() {
       try {
         const parsed = JSON.parse(savedProfile) as CareProfile;
         if (parsed && typeof parsed.elderName === "string") {
-          setProfile({ elderName: parsed.elderName, contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [], ...(parsed.shop ? { shop: parsed.shop } : {}), ...(parsed.ambulance ? { ambulance: parsed.ambulance } : {}) });
+          setProfile({ elderName: parsed.elderName, ...(typeof parsed.elderPhone === "string" && parsed.elderPhone ? { elderPhone: parsed.elderPhone } : {}), contacts: Array.isArray(parsed.contacts) ? parsed.contacts : [], ...(parsed.shop ? { shop: parsed.shop } : {}), ...(parsed.ambulance ? { ambulance: parsed.ambulance } : {}) });
         }
       } catch {
         // A damaged saved profile is ignored so setup can be completed again.
@@ -176,26 +177,25 @@ function Index() {
 
     const finish = (status: ResultStatus, phone: string) => {
       if (submissionRef.current !== submission) return;
-      setOutcome({ status, calling: Boolean(phone) });
+      setOutcome({ status, calling: Boolean(phone), callName, callPhone: phone });
       setScreen("confirmation");
       if (phone) window.location.href = telHref(phone);
     };
 
-    if (action === "Talk to Family") {
-      const familyPhone = profile?.contacts[0]?.phone ?? "";
-      finish(familyPhone ? "family" : "no_family", familyPhone);
-      return;
-    }
-
-    const requestType = action === "Medical Support" ? "medical" : "groceries";
-    const phone =
-      action === "Medical Support"
-        ? profile?.contacts[0]?.phone ?? ""
-        : profile?.shop?.phone ?? profile?.contacts[1]?.phone ?? "";
+    // Medical and Talk to Family (call assistance) alert every family contact and dial the first one.
+    // Daily Needs alerts the shop AND the family (so someone sees it even if the shop does not),
+    // and dials the shop (or the second family contact if no shop is saved).
+    const requestType = action === "Medical Support" ? "medical" : action === "Daily Needs" ? "groceries" : "callback";
+    const familyPhones = (profile?.contacts ?? []).map((c) => c.phone).filter(Boolean);
+    const shopContact = profile?.shop?.phone ? { name: profile.shop.name || "Shop", phone: profile.shop.phone } : profile?.contacts[1];
+    const dialContact = requestType === "groceries" ? shopContact : profile?.contacts[0];
+    const recipients = [...new Set(requestType === "groceries" ? [profile?.shop?.phone ?? "", ...familyPhones] : familyPhones)].filter(Boolean);
+    const phone = dialContact?.phone ?? "";
+    const callName = dialContact?.name ?? "";
 
     let savedId: string | null = null;
     try {
-      const location = requestType === "medical" ? await getLocation() : null;
+      const location = requestType === "callback" ? null : await getLocation();
       // The ID is created here because the app may only INSERT requests, not read them back
       // (asking for the new row with .select() is rejected by the database's security rules).
       const newId = crypto.randomUUID();
@@ -222,7 +222,10 @@ function Index() {
 
     let alertSent = false;
     try {
-      const result = await withTimeout(sendWhatsAppAlert({ data: { requestId: savedId } }), ALERT_TIMEOUT_MS);
+      const result = await withTimeout(
+        sendWhatsAppAlert({ data: { requestId: savedId, recipients, elderPhone: profile?.elderPhone ?? "" } }),
+        ALERT_TIMEOUT_MS,
+      );
       alertSent = result.sent;
       if (!result.sent) console.error(`WhatsApp alert not sent: ${result.reason}`);
     } catch (alertError) {
@@ -357,15 +360,17 @@ function Index() {
     };
   }, [language, screen, outcome]);
 
-  // Only a fully successful result returns home on its own; problems stay on screen until dismissed.
+  // The result screen returns home on its own only when everything worked and there is no one to call;
+  // otherwise it stays (with its Call button) until the person taps "Back to home".
   const resultIsSuccess = outcome?.status === "sent" || outcome?.status === "family";
+  const autoReturnHome = resultIsSuccess && !outcome?.callPhone;
 
   useEffect(() => {
-    if (screen !== "confirmation" || !resultIsSuccess) return;
+    if (screen !== "confirmation" || !autoReturnHome) return;
 
     const homeTimer = window.setTimeout(() => setScreen("home"), 4500);
     return () => window.clearTimeout(homeTimer);
-  }, [screen, resultIsSuccess]);
+  }, [screen, autoReturnHome]);
 
   if (!hydrated) {
     return <main className="app-background min-h-svh" aria-hidden="true" />;
@@ -431,6 +436,11 @@ function Index() {
           </div>
           <p className="mt-8 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
            <h1 className="font-heading mt-2 text-4xl font-bold text-foreground">Listening...</h1>
+          {language && (
+            <p className="mt-2 text-xl font-bold text-muted-foreground">
+              Speak in {LANGUAGES.find((option) => option.code === language)?.label}
+            </p>
+          )}
           <label htmlFor="spoken-text" className="mt-8 self-start text-2xl font-bold text-foreground">
             What I heard
           </label>
@@ -476,7 +486,6 @@ function Index() {
   }
 
   if (screen === "confirmation" && outcome) {
-    const familyContact = profile.contacts[0];
     return (
       <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
         <OrganicShapes />
@@ -493,12 +502,12 @@ function Index() {
           <p className="mt-8 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
           <h1 className="font-heading mt-3 text-4xl font-bold leading-tight text-foreground">{RESULT_HEADING[outcome.status]}</h1>
           {language && <p className="mt-4 text-2xl font-semibold text-foreground">{resultMessage(outcome.status, outcome.calling, language)}</p>}
-          {!resultIsSuccess && familyContact?.phone && (
+          {outcome.callPhone && (
             <a
-              href={telHref(familyContact.phone)}
+              href={telHref(outcome.callPhone)}
               className="mt-8 flex min-h-[100px] w-full items-center justify-center rounded-[2rem] bg-primary px-6 text-3xl font-bold text-primary-foreground shadow-warm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring"
             >
-              Call {familyContact.name}
+              Call {outcome.callName || "now"}
             </a>
           )}
           {selectedAction === "Medical Support" && profile.ambulance?.phone && (
@@ -509,7 +518,7 @@ function Index() {
               Call Ambulance
             </a>
           )}
-          {!resultIsSuccess && (
+          {!autoReturnHome && (
             <Button variant="quiet" onClick={() => setScreen("home")} className="mt-6 min-h-16 w-full text-2xl">
               Back to home
             </Button>
@@ -591,6 +600,7 @@ function Index() {
 
 function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { initialProfile: CareProfile | null; isEditing: boolean; onCancel?: () => void; onComplete: (profile: CareProfile) => void }) {
   const [elderName, setElderName] = useState(initialProfile?.elderName ?? "");
+  const [elderPhone, setElderPhone] = useState(initialProfile?.elderPhone ?? "");
   const [contacts, setContacts] = useState<FamilyContact[]>(() => Array.from({ length: 3 }, (_, index) => initialProfile?.contacts[index] ?? { name: "", phone: "" }));
   const [shop, setShop] = useState<FamilyContact>(() => initialProfile?.shop ?? { name: "", phone: "" });
   const [ambulance, setAmbulance] = useState<FamilyContact>(() => initialProfile?.ambulance ?? { name: "", phone: "" });
@@ -623,7 +633,7 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
 
     setError("");
     const trimmedShop = { name: shop.name.trim(), phone: shop.phone.trim() };
-    onComplete({ elderName: trimmedName, contacts: filledContacts, ...(trimmedShop.phone ? { shop: trimmedShop } : {}), ...(ambulance.phone.trim() ? { ambulance: { name: ambulance.name.trim(), phone: ambulance.phone.trim() } } : {}) });
+    onComplete({ elderName: trimmedName, ...(elderPhone.trim() ? { elderPhone: elderPhone.trim() } : {}), contacts: filledContacts, ...(trimmedShop.phone ? { shop: trimmedShop } : {}), ...(ambulance.phone.trim() ? { ambulance: { name: ambulance.name.trim(), phone: ambulance.phone.trim() } } : {}) });
   };
 
   const moveToNextField = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -659,6 +669,21 @@ function SetupScreen({ initialProfile, isEditing, onCancel, onComplete }: { init
           onChange={(event) => setElderName(event.target.value)}
           onKeyDown={moveToNextField}
           placeholder="Name"
+          className="mt-3 h-16 w-full rounded-2xl border-4 border-border bg-card px-4 text-2xl text-card-foreground shadow-soft md:text-2xl"
+        />
+
+        <label htmlFor="elder-phone" className="mt-6 w-full text-2xl font-bold text-foreground">
+          Their phone number (optional)
+        </label>
+        <Input
+          id="elder-phone"
+          data-setup-field
+          type="tel"
+          inputMode="tel"
+          value={elderPhone}
+          onChange={(event) => setElderPhone(event.target.value)}
+          onKeyDown={moveToNextField}
+          placeholder="So family can call back"
           className="mt-3 h-16 w-full rounded-2xl border-4 border-border bg-card px-4 text-2xl text-card-foreground shadow-soft md:text-2xl"
         />
 
