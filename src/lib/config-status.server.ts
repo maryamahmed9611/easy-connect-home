@@ -37,7 +37,16 @@ export async function logConfigStatus(): Promise<void> {
   const lines = REQUIRED.map((name) => `  ${name}: ${isSet(name) ? "set" : "MISSING"}`);
   const testVar = isSet("WHATSAPP_TEST_NUMBER") ? "WHATSAPP_TEST_NUMBER" : isSet("TWILIO_TEST_NUMBER") ? "TWILIO_TEST_NUMBER" : null;
   lines.push(`  WhatsApp test mode: ${testVar ? `ON (via ${testVar}) – all alerts go to the test number` : "OFF – alerts go to real contacts"}`);
-  lines.push(`  WhatsApp token check: ${await checkWhatsAppToken()}`);
+  const tokenStatus = await checkWhatsAppToken();
+  lines.push(`  WhatsApp token check: ${tokenStatus}`);
+  const token = process.env["WHATSAPP_TOKEN"];
+  if (token && tokenStatus === "accepted by Meta") {
+    const { resolveTemplates } = await import("./whatsapp-templates.server");
+    const { templates, found } = await resolveTemplates(token);
+    for (const kind of ["medical", "groceries", "callback"] as const) {
+      lines.push(`  Template (${kind}): ${templates[kind].name} [${templates[kind].language}] ${found.includes(kind) ? "– found in Meta" : "– NOT found, using default name"}`);
+    }
+  }
   console.log(`[config-status]\n${lines.join("\n")}`);
 }
 
