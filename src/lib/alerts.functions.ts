@@ -1,17 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-// Approved WhatsApp templates (WhatsApp Manager → Message templates). Every template has four
-// body placeholders {{1}}–{{4}}. If a template send fails (wrong name, not approved yet), the
-// alert falls back to a plain text message, which Meta delivers within the 24-hour window.
-// TODO: confirm the exact template names in WhatsApp Manager.
-const TEMPLATES = {
-  medical: { name: "elderly_assistance_alert", language: "en" },
-  groceries: { name: "grocery_request_alert", language: "en" },
-  callback: { name: "call_assistsance_request", language: "en" },
-} as const;
-
-type RequestType = keyof typeof TEMPLATES;
+// Alerts use the approved WhatsApp templates (WhatsApp Manager → Message templates), each with four
+// body placeholders {{1}}–{{4}}. Template names are looked up from Meta (whatsapp-templates.server.ts).
+// If a template send fails, the alert falls back to a plain text message, which Meta delivers
+// within the 24-hour window.
+type RequestType = "medical" | "groceries" | "callback";
 
 const MAX_RECIPIENTS = 5;
 
@@ -127,7 +121,8 @@ export const sendWhatsAppAlert = createServerFn({ method: "POST" })
       text = { medical: tag + text.medical, groceries: tag + text.groceries, callback: tag + text.callback };
     }
 
-    const template = TEMPLATES[requestType];
+    const { resolveTemplates } = await import("@/lib/whatsapp-templates.server");
+    const template = (await resolveTemplates(token)).templates[requestType];
     let delivered = 0;
     for (const recipient of recipients) {
       const to = recipient.replace("+", "");
