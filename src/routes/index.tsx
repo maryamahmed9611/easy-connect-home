@@ -255,9 +255,8 @@ function Index() {
     finish(alertSent ? "sent" : "saved", phone);
   };
 
-  // langOverride is used when the language is switched on the listening screen (state updates are async).
-  const startListening = (action: CareAction, langOverride?: LanguageCode) => {
-    const listenLanguage = langOverride ?? language;
+  const startListening = (action: CareAction) => {
+    const listenLanguage = language;
     setSelectedAction(action);
     setTranscript("");
     transcriptRef.current = "";
@@ -404,6 +403,11 @@ function Index() {
       initialProfile: profile,
       isEditing: editingProfile,
       onComplete: (newProfile: CareProfile) => {
+        // First-time setup always continues to the language page (chosen once, right after the contacts).
+        if (!editingProfile) {
+          window.localStorage.removeItem(LANGUAGE_KEY);
+          setLanguage(null);
+        }
         saveProfile(newProfile);
         setEditingProfile(false);
       },
@@ -463,26 +467,6 @@ function Index() {
           <p className="mt-8 text-2xl font-bold text-muted-foreground">{ACTION_LABEL[selectedAction][lang]}</p>
            <h1 className="font-heading mt-2 text-4xl font-bold text-foreground">{UI_TEXT.listening[lang]}</h1>
           <p className="mt-2 text-xl font-bold text-muted-foreground">{UI_TEXT.speakIn[lang]}</p>
-          <div className="mt-3 grid w-full grid-cols-3 gap-2" role="group" aria-label="Choose listening language">
-            {LANGUAGES.map((option) => (
-              <Button
-                key={option.code}
-                variant="quiet"
-                aria-pressed={option.code === lang}
-                onClick={() => {
-                  if (option.code === lang) return;
-                  window.localStorage.setItem(LANGUAGE_KEY, option.code);
-                  setLanguage(option.code);
-                  startListening(selectedAction, option.code);
-                }}
-                className={`min-h-14 rounded-2xl border-2 text-xl font-bold ${
-                  option.code === lang ? "border-microphone bg-microphone text-microphone-foreground hover:bg-microphone" : "border-border bg-card text-card-foreground hover:bg-card"
-                }`}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
           <label htmlFor="spoken-text" className="mt-8 self-start text-2xl font-bold text-foreground">
             {UI_TEXT.whatIHeard[lang]}
           </label>
