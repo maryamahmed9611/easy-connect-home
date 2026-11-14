@@ -196,9 +196,11 @@ function Index() {
     let savedId: string | null = null;
     try {
       const location = requestType === "medical" ? await getLocation() : null;
-      const { data, error } = await supabase
-        .from("requests")
-        .insert({
+      // The ID is created here because the app may only INSERT requests, not read them back
+      // (asking for the new row with .select() is rejected by the database's security rules).
+      const newId = crypto.randomUUID();
+      const { error } = await supabase.from("requests").insert({
+          id: newId,
           name: profile?.elderName ?? "",
           requestType,
           details,
@@ -206,11 +208,9 @@ function Index() {
           latitude: location?.latitude ?? null,
           longitude: location?.longitude ?? null,
           fallback_phone: requestType === "medical" ? profile?.ambulance?.phone || null : null,
-        })
-        .select("id")
-        .single();
-      if (error) console.error("Could not save request", error.message);
-      savedId = data?.id ?? null;
+        });
+      if (error) console.error(`Could not save request [${error.code}]: ${error.message}`);
+      else savedId = newId;
     } catch (saveError) {
       console.error("Could not save request", saveError);
     }
