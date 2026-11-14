@@ -68,7 +68,8 @@ const LANGUAGES: Array<{ code: LanguageCode; label: string }> = [
 const ALERT_TIMEOUT_MS = 20000;
 
 // What actually happened to the last request. The result screen is driven only by this.
-type RequestOutcome = { status: ResultStatus; calling: boolean };
+// callName/callPhone: who the app dials, also shown as a big "Call …" button on the result screen.
+type RequestOutcome = { status: ResultStatus; calling: boolean; callName: string; callPhone: string };
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -176,18 +177,21 @@ function Index() {
 
     const finish = (status: ResultStatus, phone: string) => {
       if (submissionRef.current !== submission) return;
-      setOutcome({ status, calling: Boolean(phone) });
+      setOutcome({ status, calling: Boolean(phone), callName, callPhone: phone });
       setScreen("confirmation");
       if (phone) window.location.href = telHref(phone);
     };
 
     // Medical and Talk to Family (call assistance) alert every family contact and dial the first one.
-    // Daily Needs alerts and dials the shop (or the second family contact if no shop is saved).
+    // Daily Needs alerts the shop AND the family (so someone sees it even if the shop does not),
+    // and dials the shop (or the second family contact if no shop is saved).
     const requestType = action === "Medical Support" ? "medical" : action === "Daily Needs" ? "groceries" : "callback";
     const familyPhones = (profile?.contacts ?? []).map((c) => c.phone).filter(Boolean);
-    const shopPhone = profile?.shop?.phone || profile?.contacts[1]?.phone || "";
-    const recipients = requestType === "groceries" ? (shopPhone ? [shopPhone] : []) : familyPhones;
-    const phone = requestType === "groceries" ? shopPhone : familyPhones[0] ?? "";
+    const shopContact = profile?.shop?.phone ? { name: profile.shop.name || "Shop", phone: profile.shop.phone } : profile?.contacts[1];
+    const dialContact = requestType === "groceries" ? shopContact : profile?.contacts[0];
+    const recipients = [...new Set(requestType === "groceries" ? [profile?.shop?.phone ?? "", ...familyPhones] : familyPhones)].filter(Boolean);
+    const phone = dialContact?.phone ?? "";
+    const callName = dialContact?.name ?? "";
 
     let savedId: string | null = null;
     try {
@@ -356,15 +360,17 @@ function Index() {
     };
   }, [language, screen, outcome]);
 
-  // Only a fully successful result returns home on its own; problems stay on screen until dismissed.
+  // The result screen returns home on its own only when everything worked and there is no one to call;
+  // otherwise it stays (with its Call button) until the person taps "Back to home".
   const resultIsSuccess = outcome?.status === "sent" || outcome?.status === "family";
+  const autoReturnHome = resultIsSuccess && !outcome?.callPhone;
 
   useEffect(() => {
-    if (screen !== "confirmation" || !resultIsSuccess) return;
+    if (screen !== "confirmation" || !autoReturnHome) return;
 
     const homeTimer = window.setTimeout(() => setScreen("home"), 4500);
     return () => window.clearTimeout(homeTimer);
-  }, [screen, resultIsSuccess]);
+  }, [screen, autoReturnHome]);
 
   if (!hydrated) {
     return <main className="app-background min-h-svh" aria-hidden="true" />;
@@ -430,6 +436,11 @@ function Index() {
           </div>
           <p className="mt-8 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
            <h1 className="font-heading mt-2 text-4xl font-bold text-foreground">Listening...</h1>
+          {language && (
+            <p className="mt-2 text-xl font-bold text-muted-foreground">
+              Speak in {LANGUAGES.find((option) => option.code === language)?.label}
+            </p>
+          )}
           <label htmlFor="spoken-text" className="mt-8 self-start text-2xl font-bold text-foreground">
             What I heard
           </label>
@@ -475,7 +486,6 @@ function Index() {
   }
 
   if (screen === "confirmation" && outcome) {
-    const familyContact = profile.contacts[0];
     return (
       <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
         <OrganicShapes />
@@ -492,12 +502,12 @@ function Index() {
           <p className="mt-8 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
           <h1 className="font-heading mt-3 text-4xl font-bold leading-tight text-foreground">{RESULT_HEADING[outcome.status]}</h1>
           {language && <p className="mt-4 text-2xl font-semibold text-foreground">{resultMessage(outcome.status, outcome.calling, language)}</p>}
-          {!resultIsSuccess && familyContact?.phone && (
+          {outcome.callPhone && (
             <a
-              href={telHref(familyContact.phone)}
+              href={telHref(outcome.callPhone)}
               className="mt-8 flex min-h-[100px] w-full items-center justify-center rounded-[2rem] bg-primary px-6 text-3xl font-bold text-primary-foreground shadow-warm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring"
             >
-              Call {familyContact.name}
+              Call {outcome.callName || "now"}
             </a>
           )}
           {selectedAction === "Medical Support" && profile.ambulance?.phone && (
@@ -508,7 +518,7 @@ function Index() {
               Call Ambulance
             </a>
           )}
-          {!resultIsSuccess && (
+          {!autoReturnHome && (
             <Button variant="quiet" onClick={() => setScreen("home")} className="mt-6 min-h-16 w-full text-2xl">
               Back to home
             </Button>
