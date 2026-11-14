@@ -6,7 +6,18 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { sendWhatsAppAlert } from "@/lib/alerts.functions";
-import { RESULT_HEADING, resultMessage, type LanguageCode, type ResultStatus } from "@/lib/care-messages";
+import {
+  ACTION_LABEL,
+  RESULT_HEADING,
+  SPEECH_ISSUE_TEXT,
+  UI_TEXT,
+  callLabel,
+  findSpokenContact,
+  resultMessage,
+  type LanguageCode,
+  type ResultStatus,
+  type SpeechIssue,
+} from "@/lib/care-messages";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -69,7 +80,7 @@ const ALERT_TIMEOUT_MS = 20000;
 
 // What actually happened to the last request. The result screen is driven only by this.
 // callName/callPhone: who the app dials, also shown as a big "Call …" button on the result screen.
-type RequestOutcome = { status: ResultStatus; calling: boolean; callName: string; callPhone: string };
+type RequestOutcome = { status: ResultStatus; calling: boolean; callName: string; callPhone: string; showAllFamily: boolean };
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -102,7 +113,7 @@ function Index() {
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedAction, setSelectedAction] = useState<CareAction>("Medical Support");
   const [transcript, setTranscript] = useState("");
-  const [speechMessage, setSpeechMessage] = useState("");
+  const [speechIssue, setSpeechIssue] = useState<SpeechIssue | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [outcome, setOutcome] = useState<RequestOutcome | null>(null);
   const submissionRef = useRef(0);
@@ -177,7 +188,7 @@ function Index() {
 
     const finish = (status: ResultStatus, phone: string) => {
       if (submissionRef.current !== submission) return;
-      setOutcome({ status, calling: Boolean(phone), callName, callPhone: phone });
+      setOutcome({ status, calling: Boolean(phone), callName, callPhone: phone, showAllFamily: requestType === "callback" });
       setScreen("confirmation");
       if (phone) window.location.href = telHref(phone);
     };
@@ -188,8 +199,18 @@ function Index() {
     const requestType = action === "Medical Support" ? "medical" : action === "Daily Needs" ? "groceries" : "callback";
     const familyPhones = (profile?.contacts ?? []).map((c) => c.phone).filter(Boolean);
     const shopContact = profile?.shop?.phone ? { name: profile.shop.name || "Shop", phone: profile.shop.phone } : profile?.contacts[1];
-    const dialContact = requestType === "groceries" ? shopContact : profile?.contacts[0];
-    const recipients = [...new Set(requestType === "groceries" ? [profile?.shop?.phone ?? "", ...familyPhones] : familyPhones)].filter(Boolean);
+    // Talk to Family: if a saved name was spoken ("talk to C2"), call and alert only that person.
+    const spokenContact = requestType === "callback" ? findSpokenContact(details, profile?.contacts ?? []) : undefined;
+    const dialContact = requestType === "groceries" ? shopContact : spokenContact ?? profile?.contacts[0];
+    const recipients = [
+      ...new Set(
+        requestType === "groceries"
+          ? [profile?.shop?.phone ?? "", ...familyPhones]
+          : spokenContact
+            ? [spokenContact.phone]
+            : familyPhones,
+      ),
+    ].filter(Boolean);
     const phone = dialContact?.phone ?? "";
     const callName = dialContact?.name ?? "";
 
@@ -234,26 +255,28 @@ function Index() {
     finish(alertSent ? "sent" : "saved", phone);
   };
 
-  const startListening = (action: CareAction) => {
+  // langOverride is used when the language is switched on the listening screen (state updates are async).
+  const startListening = (action: CareAction, langOverride?: LanguageCode) => {
+    const listenLanguage = langOverride ?? language;
     setSelectedAction(action);
     setTranscript("");
     transcriptRef.current = "";
     setOutcome(null);
-    setSpeechMessage("");
+    setSpeechIssue(null);
     setScreen("listening");
 
-    if (!language) return;
+    if (!listenLanguage) return;
 
     const speechWindow = window as SpeechRecognitionWindow;
     const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
     if (!Recognition) {
-      setSpeechMessage("Voice recognition is not available in this browser. You can continue using the button below.");
+      setSpeechIssue("unsupported");
       return;
     }
 
     stopRecognition();
     const recognition = new Recognition();
-    recognition.lang = language;
+    recognition.lang = listenLanguage;
     recognition.continuous = false;
     recognition.interimResults = true;
     recognitionActiveRef.current = true;
@@ -280,11 +303,11 @@ function Index() {
       recognitionActiveRef.current = false;
       recognitionRef.current = null;
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-        setSpeechMessage("Microphone access was not allowed. Please enable it in your browser settings, or continue using the button below.");
+        setSpeechIssue("not_allowed");
       } else if (event.error === "no-speech") {
-        setSpeechMessage("I could not hear any speech. Please go back and try again, or continue using the button below.");
+        setSpeechIssue("no_speech");
       } else {
-        setSpeechMessage("Voice listening could not start. You can continue using the button below.");
+        setSpeechIssue("could_not_start");
       }
     };
 
@@ -300,7 +323,7 @@ function Index() {
     } catch {
       recognitionActiveRef.current = false;
       recognitionRef.current = null;
-      setSpeechMessage("Voice listening could not start. You can continue using the button below.");
+      setSpeechIssue("could_not_start");
     }
   };
 
@@ -415,6 +438,9 @@ function Index() {
     );
   }
 
+  // From here on a language has been chosen; every screen below speaks and shows text in it.
+  const lang: LanguageCode = language;
+
   if (screen === "listening") {
     return (
       <main className="app-background relative grid min-h-svh place-items-center overflow-hidden px-6 py-5">
@@ -434,15 +460,31 @@ function Index() {
           <div className="listening-pulse mt-14 grid size-36 place-items-center rounded-full bg-microphone text-microphone-foreground shadow-warm" aria-hidden="true">
             <Mic className="size-16" strokeWidth={2.5} />
           </div>
-          <p className="mt-8 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
-           <h1 className="font-heading mt-2 text-4xl font-bold text-foreground">Listening...</h1>
-          {language && (
-            <p className="mt-2 text-xl font-bold text-muted-foreground">
-              Speak in {LANGUAGES.find((option) => option.code === language)?.label}
-            </p>
-          )}
+          <p className="mt-8 text-2xl font-bold text-muted-foreground">{ACTION_LABEL[selectedAction][lang]}</p>
+           <h1 className="font-heading mt-2 text-4xl font-bold text-foreground">{UI_TEXT.listening[lang]}</h1>
+          <p className="mt-2 text-xl font-bold text-muted-foreground">{UI_TEXT.speakIn[lang]}</p>
+          <div className="mt-3 grid w-full grid-cols-3 gap-2" role="group" aria-label="Choose listening language">
+            {LANGUAGES.map((option) => (
+              <Button
+                key={option.code}
+                variant="quiet"
+                aria-pressed={option.code === lang}
+                onClick={() => {
+                  if (option.code === lang) return;
+                  window.localStorage.setItem(LANGUAGE_KEY, option.code);
+                  setLanguage(option.code);
+                  startListening(selectedAction, option.code);
+                }}
+                className={`min-h-14 rounded-2xl border-2 text-xl font-bold ${
+                  option.code === lang ? "border-microphone bg-microphone text-microphone-foreground hover:bg-microphone" : "border-border bg-card text-card-foreground hover:bg-card"
+                }`}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
           <label htmlFor="spoken-text" className="mt-8 self-start text-2xl font-bold text-foreground">
-            What I heard
+            {UI_TEXT.whatIHeard[lang]}
           </label>
           <textarea
             id="spoken-text"
@@ -451,7 +493,7 @@ function Index() {
             value={transcript}
             className="mt-3 h-28 w-full resize-none rounded-3xl border-4 border-border bg-card p-4 text-2xl text-card-foreground shadow-soft focus:outline-none"
           />
-          {speechMessage ? <p className="mt-4 text-2xl font-bold leading-snug text-foreground" role="alert">{speechMessage}</p> : null}
+          {speechIssue ? <p className="mt-4 text-2xl font-bold leading-snug text-foreground" role="alert">{SPEECH_ISSUE_TEXT[speechIssue][lang]}</p> : null}
           <Button
             onClick={() => {
               stopRecognition();
@@ -459,7 +501,7 @@ function Index() {
             }}
             className="mt-7 min-h-16 w-full rounded-2xl px-8 text-2xl"
           >
-            Confirm Request
+            {UI_TEXT.confirm[lang]}
           </Button>
         </section>
       </main>
@@ -476,9 +518,9 @@ function Index() {
             <span className="size-6 rounded-full bg-current" />
             <span className="size-6 rounded-full bg-current" />
           </div>
-          <p className="mt-6 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
+          <p className="mt-6 text-2xl font-bold text-muted-foreground">{ACTION_LABEL[selectedAction][lang]}</p>
            <h1 className="font-heading mt-3 max-w-sm text-4xl font-bold leading-tight text-foreground">
-            Sending your request, please wait
+            {UI_TEXT.sending[lang]}
           </h1>
         </section>
       </main>
@@ -499,15 +541,31 @@ function Index() {
               <TriangleAlert className="size-24" strokeWidth={2.5} />
             </div>
           )}
-          <p className="mt-8 text-2xl font-bold text-muted-foreground">{selectedAction}</p>
-          <h1 className="font-heading mt-3 text-4xl font-bold leading-tight text-foreground">{RESULT_HEADING[outcome.status]}</h1>
-          {language && <p className="mt-4 text-2xl font-semibold text-foreground">{resultMessage(outcome.status, outcome.calling, language)}</p>}
-          {outcome.callPhone && (
+          <p className="mt-8 text-2xl font-bold text-muted-foreground">{ACTION_LABEL[selectedAction][lang]}</p>
+          <h1 className="font-heading mt-3 text-4xl font-bold leading-tight text-foreground">{RESULT_HEADING[outcome.status][lang]}</h1>
+          <p className="mt-4 text-2xl font-semibold text-foreground">{resultMessage(outcome.status, outcome.calling, lang)}</p>
+          {/* Talk to Family: one button per saved contact (the one being dialled first), so the right person can always be tapped. */}
+          {outcome.showAllFamily &&
+            [...profile.contacts]
+              .filter((contact) => contact.phone)
+              .sort((a, b) => Number(b.phone === outcome.callPhone) - Number(a.phone === outcome.callPhone))
+              .map((contact) => (
+                <a
+                  key={`${contact.name}-${contact.phone}`}
+                  href={telHref(contact.phone)}
+                  className={`mt-5 flex min-h-[88px] w-full items-center justify-center rounded-[2rem] px-6 text-3xl font-bold shadow-warm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring ${
+                    contact.phone === outcome.callPhone ? "bg-primary text-primary-foreground" : "border-4 border-border bg-card text-card-foreground"
+                  }`}
+                >
+                  {callLabel(contact.name, lang)}
+                </a>
+              ))}
+          {!outcome.showAllFamily && outcome.callPhone && (
             <a
               href={telHref(outcome.callPhone)}
               className="mt-8 flex min-h-[100px] w-full items-center justify-center rounded-[2rem] bg-primary px-6 text-3xl font-bold text-primary-foreground shadow-warm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring"
             >
-              Call {outcome.callName || "now"}
+              {callLabel(outcome.callName, lang)}
             </a>
           )}
           {selectedAction === "Medical Support" && profile.ambulance?.phone && (
@@ -515,12 +573,12 @@ function Index() {
               href={telHref(profile.ambulance.phone)}
               className="mt-8 flex min-h-[100px] w-full items-center justify-center rounded-[2rem] bg-destructive px-6 text-3xl font-bold text-destructive-foreground shadow-warm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring"
             >
-              Call Ambulance
+              {UI_TEXT.callAmbulance[lang]}
             </a>
           )}
           {!autoReturnHome && (
             <Button variant="quiet" onClick={() => setScreen("home")} className="mt-6 min-h-16 w-full text-2xl">
-              Back to home
+              {UI_TEXT.backHome[lang]}
             </Button>
           )}
         </section>
